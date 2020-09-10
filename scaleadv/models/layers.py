@@ -15,7 +15,7 @@ class NormalizationLayer(nn.Module):
 
         mean = torch.as_tensor(self.mean, dtype=x.dtype, device=x.device)
         std = torch.as_tensor(self.std, dtype=x.dtype, device=x.device)
-        x.sub_(mean[None, :, None, None]).div_(std[None, :, None, None])
+        x = (x - mean[None, :, None, None]) / std[None, :, None, None]
         return x
 
     def __repr__(self):
