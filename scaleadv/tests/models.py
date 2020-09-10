@@ -7,6 +7,7 @@ from art.attacks.evasion import ProjectedGradientDescentPyTorch
 from scaleadv.models.resnet import create_network
 from scaleadv.models.layers import NormalizationLayer
 from scaleadv.datasets.imagenet import create_dataset, IMAGENET_NUM_CLASSES, IMAGENET_MEAN, IMAGENET_STD
+from scaleadv.attacks.adv import AdvAttack
 
 
 def get_classifier():
@@ -39,7 +40,8 @@ if __name__ == '__main__':
     data = create_dataset('static/datasets/imagenet/val/')
     loader = DataLoader(data, batch_size=128, num_workers=8)
     classifier = get_classifier()
-    attack = ProjectedGradientDescentPyTorch(classifier, norm=np.inf, eps=0.3, eps_step=0.02, max_iter=20)
+    art = ProjectedGradientDescentPyTorch(classifier, norm=np.inf, eps=0.3, eps_step=0.02, max_iter=20)
+    attack = AdvAttack(art)
     evaluate(loader, classifier, 'Good')
     evaluate(loader, classifier, 'Evil', attack)
 
