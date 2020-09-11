@@ -1,3 +1,4 @@
 [submodule "2019-scalingattack"]
 	path = ext/scalingattack
 	url = git@github.com:EQuiw/2019-scalingattack.git
+    ignore = dirty
