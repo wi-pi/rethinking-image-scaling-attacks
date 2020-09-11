@@ -14,7 +14,6 @@ def get_src(data, index):
 def get_tgt(data, index):
     img, y = data[index]
     img = img.resize((256, 256))
-    #mg = img.resize((224, 224))
     x = np.array(img)
     return x
 
@@ -42,7 +41,13 @@ if __name__ == '__main__':
     tgt = get_tgt(data, tgt_id)
 
     # scale attack
-    attack = ScaleAttack(lib=SuppScalingLibraries.PIL, algo=SuppScalingAlgorithms.NEAREST)
+    kwargs = {
+        'eps': 1,
+        'bandwidth': 1,
+        'allowed_changes': 0.8,
+        'verbose': False,
+    }
+    attack = ScaleAttack(lib=SuppScalingLibraries.PIL, algo=SuppScalingAlgorithms.NEAREST, **kwargs)
     scale = ScalingGenerator.create_scaling_approach(src.shape, tgt.shape, attack.lib, attack.algo)
     imgs = x_scl, x_scl_protected, x_ada, x_ada_protected = attack.generate(src, tgt)
 

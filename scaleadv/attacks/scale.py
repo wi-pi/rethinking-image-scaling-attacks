@@ -11,9 +11,11 @@ from defenses.prevention.PreventionDefenseGenerator import PreventionDefenseGene
 
 class ScaleAttack(object):
 
-    def __init__(self, lib: SuppScalingLibraries, algo: SuppScalingAlgorithms):
+    def __init__(self, lib: SuppScalingLibraries, algo: SuppScalingAlgorithms, eps=1, bandwidth=2, allowed_changes=0.8, verbose=False):
         assert ScalingGenerator.check_valid_lib_alg_input(lib, algo)
         self.lib, self.algo = lib, algo
+        self.eps, self.bw, self.modi = eps, bandwidth, allowed_changes
+        self.verbose = verbose
 
     def generate(self, src: np.ndarray, tgt: np.ndarray):
         self._validate_input(src)
@@ -21,7 +23,7 @@ class ScaleAttack(object):
 
         # scaling attack
         scale_approach = ScalingGenerator.create_scaling_approach(src.shape, tgt.shape, self.lib, self.algo)
-        scale_attack = QuadraticScaleAttack(eps=1, verbose=True)
+        scale_attack = QuadraticScaleAttack(eps=self.eps, verbose=self.verbose)
         scale_result, _, _ = scale_attack.attack(src, tgt, scale_approach)
 
         # adaptive scaling attack
@@ -29,18 +31,18 @@ class ScaleAttack(object):
             defense_type=PreventionTypeDefense.medianfiltering,
             scaler_approach=scale_approach,
             fourierpeakmatrixcollector=FourierPeakMatrixCollector(PeakMatrixMethod.optimization, self.algo, self.lib),
-            bandwidth=1,
-            verbose_flag=True,
+            bandwidth=self.bw,
+            verbose_flag=self.verbose,
             usecythonifavailable=True
         )
         adaptive_attack = AdaptiveAttackPreventionGenerator.create_adaptive_attack(
             defense_type=PreventionTypeDefense.medianfiltering,
             scaler_approach=scale_approach,
             preventiondefense=defense,
-            verbose_flag=True,
+            verbose_flag=self.verbose,
             usecythonifavailable=True,
             choose_only_unused_pixels_in_overlapping_case=False,
-            allowed_changes=0.8
+            allowed_changes=self.modi
         )
         scale_result_adaptive = adaptive_attack.counter_attack(scale_result)
 
