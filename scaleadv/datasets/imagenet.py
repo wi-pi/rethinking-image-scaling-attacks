@@ -11,5 +11,5 @@ IMAGENET_TRANSFORM = T.Compose([
     T.ToTensor(),
 ])
 
-def create_dataset(root):
-    return ImageFolder(root, transform=IMAGENET_TRANSFORM)
+def create_dataset(root, transform=IMAGENET_TRANSFORM):
+    return ImageFolder(root, transform=transform)
