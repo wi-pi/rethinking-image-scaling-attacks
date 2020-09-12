@@ -1,4 +1,5 @@
 import os
+import sys
 from collections import OrderedDict
 
 import numpy as np
@@ -100,13 +101,14 @@ def predict(classifier, fname, path=''):
 
 if __name__ == '__main__':
     # get data
-    test_id = 10000
+    test_id = int(sys.argv[1])
     path = 'static/results/scaleadv'
     os.makedirs(path, exist_ok=True)
 
     # load data
     data = create_dataset('static/datasets/imagenet/val/', transform=None)
     img, y = data[test_id]
+    print(f'Loaded "{data.imgs[test_id][0]}".')
 
     # get adv attacker
     classifier = get_classifier()
