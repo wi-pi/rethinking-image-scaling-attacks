@@ -24,9 +24,9 @@ def save(x, name, path=''):
 
     from PIL import Image
     img = Image.fromarray(x.astype(np.uint8))
-    filename = os.path.join(path, f'{name}.pdf')
+    filename = os.path.join(path, f'{name}.png')
     img.save(filename)
-    print(f'Saving "i{filename}".')
+    print(f'Saving "{filename}".')
 
 
 if __name__ == '__main__':
