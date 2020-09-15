@@ -1,3 +1,4 @@
+import sys
 import torch
 import numpy as np
 from PIL import Image
@@ -30,13 +31,23 @@ def compare(x, y, cap='Compare'):
     print(f'[MS-SSIM] {M.msssim(x, y):.5f}', end='\t')
     print(f'[LPIPS] {M.lpips(x, y):.5f}', end='\t')
     print()
+    print()
 
 
 if __name__ == '__main__':
-    x_src = load('static/results/scaleadv/0.src.png')
-    x_adv = load('static/results/scaleadv/0.x_adv_scl.big.png')
-    x_scl = load('static/results/scaleadv/0.x_ada_defense.big.png')
+    test_id = int(sys.argv[1])
 
-    compare(x_src, x_adv, 'Adv')
-    compare(x_src, x_scl, 'Scl')
+    # small
+    x_src = load(f'static/results/scaleadv/{test_id}.src.small.png')
+    x_adv = load(f'static/results/scaleadv/{test_id}.x_adv_scl.small.png')
+    x_scl = load(f'static/results/scaleadv/{test_id}.x_ada_defense.small.png')
+    compare(x_src, x_adv, f'Adv.inp')
+    compare(x_src, x_scl, f'Scl.inp')
+
+    x_src = load(f'static/results/scaleadv/{test_id}.src.png')
+    x_adv = load(f'static/results/scaleadv/{test_id}.x_adv_scl.big.png')
+    x_scl = load(f'static/results/scaleadv/{test_id}.x_ada_defense.big.png')
+    compare(x_src, x_adv, 'Adv.big')
+    compare(x_src, x_scl, 'Scl.big')
+
 

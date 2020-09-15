@@ -145,6 +145,7 @@ if __name__ == '__main__':
         save(xs, f'{test_id}.{c}.small', path)
     save(src, f'{test_id}.src', path)
     save(tgt, f'{test_id}.tgt', path)
+    save(x_raw, f'{test_id}.src.small', path)
     
     # check predictions
     preds = OrderedDict({'y': y})
