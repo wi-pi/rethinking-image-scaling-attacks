@@ -16,6 +16,7 @@ from scaleadv.attacks.scale import ScaleAttack, SuppScalingLibraries, SuppScalin
 from scaling.ScalingGenerator import ScalingGenerator
 from scaleadv.tests.models import get_classifier
 from scaleadv.tests.scale import save
+from scaleadv.tests.metric import run
 
 
 def np_to_tensor(x):
@@ -145,6 +146,7 @@ if __name__ == '__main__':
         save(xs, f'{test_id}.{c}.small', path)
     save(src, f'{test_id}.src', path)
     save(tgt, f'{test_id}.tgt', path)
+    save(x_raw, f'{test_id}.src.small', path)
     
     # check predictions
     preds = OrderedDict({'y': y})
@@ -155,4 +157,7 @@ if __name__ == '__main__':
         preds[f'{tag}.small'] = predict(classifier, f'{test_id}.{tag}.small.png', path)
     for tag, y in preds.items():
         print(f'{tag:22s} {y}')
+
+    # check metrics
+    run(test_id)
 
