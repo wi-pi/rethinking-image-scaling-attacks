@@ -31,12 +31,9 @@ def compare(x, y, cap='Compare'):
     print(f'[MS-SSIM] {M.msssim(x, y):.5f}', end='\t')
     print(f'[LPIPS] {M.lpips(x, y):.5f}', end='\t')
     print()
-    print()
 
 
-if __name__ == '__main__':
-    test_id = int(sys.argv[1])
-
+def run(test_id):
     # small
     x_src = load(f'static/results/scaleadv/{test_id}.src.small.png')
     x_adv = load(f'static/results/scaleadv/{test_id}.x_adv_scl.small.png')
@@ -44,6 +41,7 @@ if __name__ == '__main__':
     compare(x_src, x_adv, f'Adv.inp')
     compare(x_src, x_scl, f'Scl.inp')
 
+    # big
     x_src = load(f'static/results/scaleadv/{test_id}.src.png')
     x_adv = load(f'static/results/scaleadv/{test_id}.x_adv_scl.big.png')
     x_scl = load(f'static/results/scaleadv/{test_id}.x_ada_defense.big.png')
@@ -51,3 +49,5 @@ if __name__ == '__main__':
     compare(x_src, x_scl, 'Scl.big')
 
 
+if __name__ == '__main__':
+    run(int(sys.argv[1]))
