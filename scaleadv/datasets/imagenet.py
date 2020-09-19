@@ -1,6 +1,7 @@
 import torchvision.transforms as T
 from scaleadv.datasets.utils import ImageFolderWithIndex
 
+IMAGENET_PATH = 'static/datasets/imagenet/val/'
 IMAGENET_NUM_CLASSES = 1000
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
@@ -15,5 +16,5 @@ IMAGENET_TRANSFORM_NOCROP = T.Compose([
 ])
 
 
-def create_dataset(root, transform=IMAGENET_TRANSFORM):
+def create_dataset(root=IMAGENET_PATH, transform=IMAGENET_TRANSFORM):
     return ImageFolderWithIndex(root, transform=transform)

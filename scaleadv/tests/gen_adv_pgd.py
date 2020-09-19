@@ -66,6 +66,7 @@ if __name__ == '__main__':
 
     # load attacker
     targeted = args.target is not None
+    # TODO: support targeted attack.
     attacker = PGD(classifier, norm=args.norm, eps=args.eps, eps_step=args.sigma, max_iter=args.iter,
                    targeted=targeted, batch_size=args.batch)
 
