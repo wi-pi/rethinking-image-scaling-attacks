@@ -38,11 +38,10 @@ class AdvAttack(object):
         pred = self.classifier.predict(x)
         return pred.argmax(1)[0], pred
 
-    def generate(self, x: np.ndarray, y: int):
+    def generate(self, x: np.ndarray):
         self._validate(x)
         x = _to_batch(x)
-        y = np.array([y])
-        x_adv = self.attacker.generate(x, y)
+        x_adv = self.attacker.generate(x)
         return _to_single(x_adv)
 
     def _validate(self, x: np.ndarray):
@@ -70,7 +69,7 @@ def test():
     aa = AdvAttack(classifier, attacker)
 
     # evaluate
-    x_evil = aa.generate(x, y)
+    x_evil = aa.generate(x)
     y_pred, _ = aa.predict(x)
     y_evil, _ = aa.predict(x_evil)
     print('True', y)

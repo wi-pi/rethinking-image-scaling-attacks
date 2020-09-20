@@ -40,13 +40,14 @@ def show_table(data):
 class ScaleAdvAttack(object):
 
     def __init__(self, classifier: PyTorchClassifier, attacker: EvasionAttack, lib: SuppScalingLibraries,
-                 algo: SuppScalingAlgorithms, input_shape: Tuple, save: str = None):
+                 algo: SuppScalingAlgorithms, input_shape: Tuple, up_factor: int = 1, save: str = None):
         self.AA = AdvAttack(classifier, attacker)
-        self.SA = ScaleAttack(lib, algo)
+        self.SA = ScaleAttack(lib, algo, allowed_changes=0.7, bandwidth=2)
         self.lib, self.algo, self.input_shape = lib, algo, input_shape
         self.lpips = LPIPS(net='alex', verbose=False).cuda()
         self.save = save
         self.stats_file = os.path.join(save, 'stats.pkl')
+        self.up_factor = up_factor
 
     def generate(self, dataset: ImageFolderWithIndex, indices: Iterable[int]):
         stats = OrderedDict()
@@ -63,6 +64,9 @@ class ScaleAdvAttack(object):
     def generate_one(self, dataset: ImageFolderWithIndex, index: int):
         # load data
         _, x_img, y_true = dataset[index]
+        new_width = int(x_img.width * self.up_factor)
+        new_height = int(x_img.height * self.up_factor)
+        x_img = x_img.resize((new_width, new_height))
         x_src = np.array(x_img)
 
         # scale src to inp
@@ -70,7 +74,7 @@ class ScaleAdvAttack(object):
         x_inp = scaling.scale_image(x_src)
 
         # process attack
-        x_adv = self.AA.generate(x_inp, y_true)
+        x_adv = self.AA.generate(x_inp)
         x_scl, x_ada, defense, scaling = self.SA.generate(src=x_src, tgt=x_adv)
         x_src_def = defense.make_image_secure(x_src)
 
@@ -133,14 +137,14 @@ if __name__ == '__main__':
         resnet50(pretrained=True)
     ).eval()
     classifier = PyTorchClassifier(model, nn.CrossEntropyLoss(), (3, 224, 224), 1000, clip_values=(0., 1.))
-    attacker = ProjectedGradientDescentPyTorch(classifier, np.inf, 0.03, 0.007, max_iter=10)
+    attacker = ProjectedGradientDescentPyTorch(classifier, np.inf, 8/255., 1/255., max_iter=20)
 
     # load SA
     lib = SuppScalingLibraries.PIL
     algo = SuppScalingAlgorithms.NEAREST
 
     # load SAA
-    path = 'static/results/scaleadv/'
+    path = 'static/results/test-saa/'
     os.makedirs(path, exist_ok=True)
     saa = ScaleAdvAttack(classifier, attacker, lib, algo, input_shape=(224, 224, 3), save=path)
 

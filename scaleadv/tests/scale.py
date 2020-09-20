@@ -7,12 +7,12 @@ from scaling.ScalingGenerator import ScalingGenerator
 
 
 def get_src(data, index):
-    img, y = data[index]
+    _, img, y = data[index]
     x = np.array(img)
     return x
 
 def get_tgt(data, index):
-    img, y = data[index]
+    _, img, y = data[index]
     img = img.resize((256, 256))
     x = np.array(img)
     return x
@@ -49,10 +49,11 @@ if __name__ == '__main__':
     }
     attack = ScaleAttack(lib=SuppScalingLibraries.PIL, algo=SuppScalingAlgorithms.NEAREST, **kwargs)
     scale = ScalingGenerator.create_scaling_approach(src.shape, tgt.shape, attack.lib, attack.algo)
-    imgs = x_scl, x_scl_protected, x_ada, x_ada_protected = attack.generate(src, tgt)
+    x_scl, x_ada, defense, scaling = attack.generate(src, tgt)
 
     # save imgs
-    caps = 'x_scl', 'x_scl_protected', 'x_ada', 'x_ada_protected'
+    imgs = x_scl, x_ada
+    caps = 'x_scl', 'x_ada'
     for x, n in zip(imgs, caps):
         save(x, f'{src_id}_{tgt_id}.{n}.big', path)
         save(scale.scale_image(x), f'{src_id}_{tgt_id}.{n}.small', path)
