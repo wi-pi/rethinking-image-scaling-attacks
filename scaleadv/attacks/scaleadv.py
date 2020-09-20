@@ -28,6 +28,15 @@ from scaleadv.datasets.utils import ImageFolderWithIndex
 from scaleadv.models.layers import NormalizationLayer
 
 
+def show_table(data):
+    data = dict(data.items())
+    fields = ['y_pred', 'Linf', 'L2', 'PSNR', 'SSIM', 'MS-SSIM', 'LPIPS']
+    t = PrettyTable([data.pop('y_true')] + fields)
+    for k, v in data.items():
+        t.add_row([k.replace('_def', '*')] + v[:1] + [f'{x:>6.3f}' for x in v[1:]])
+    print(t)
+
+
 class ScaleAdvAttack(object):
 
     def __init__(self, classifier: PyTorchClassifier, attacker: EvasionAttack, lib: SuppScalingLibraries,
@@ -37,12 +46,16 @@ class ScaleAdvAttack(object):
         self.lib, self.algo, self.input_shape = lib, algo, input_shape
         self.lpips = LPIPS(net='alex', verbose=False).cuda()
         self.save = save
+        self.stats_file = os.path.join(save, 'stats.pkl')
 
     def generate(self, dataset: ImageFolderWithIndex, indices: Iterable[int]):
         stats = OrderedDict()
         for i in tqdm(indices):
             try:
                 stats[i] = self.generate_one(dataset, i)
+                pickle.dump(stats, open(self.stats_file, 'wb'))
+                print(i)
+                show_table(stats[i])
             except Exception as e:
                 print(e)
         return stats
@@ -97,14 +110,14 @@ class ScaleAdvAttack(object):
         return stats
 
     def _diff(self, x: np.ndarray, y: np.ndarray):
-        x, y = map(lambda v: torch.as_tensor(_to_batch(v), dtype=torch.float32).cuda(), [x, y])
+        x, y = map(lambda v: torch.as_tensor(_to_batch(v), dtype=torch.float32), [x, y])
         stats = [
             torch.norm(x - y, p=float('inf')),
             torch.norm(x - y, p=2),
             piq.psnr(x, y, data_range=1),
             piq.ssim(x, y, data_range=1),
             piq.multi_scale_ssim(x, y, data_range=1),
-            self.lpips(x * 2 - 1, y * 2 - 1),
+            self.lpips(x.cuda() * 2 - 1, y.cuda() * 2 - 1),
         ]
         stats = [i.squeeze().cpu().item() for i in stats]
         return stats
@@ -137,14 +150,5 @@ if __name__ == '__main__':
     stats = saa.generate(dataset, indices)
 
     # save stats
-    filename = os.path.join(path, 'test.pkl')
+    filename = os.path.join(path, 'stats_final.pkl')
     pickle.dump(stats, open(filename, 'wb'))
-
-    # display stats
-    fields = ['y_pred', 'Linf', 'L2', 'PSNR', 'SSIM', 'MS-SSIM', 'LPIPS']
-    for i, data in stats.items():
-        t = PrettyTable([data.pop('y_true')] + fields)
-        for k, v in data.items():
-            t.add_row([k.replace('_def', '*')] + v[:1] + [f'{x:>6.3f}' for x in v[1:]])
-        print(i)
-        print(t)
