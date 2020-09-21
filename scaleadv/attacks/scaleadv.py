@@ -40,21 +40,25 @@ def show_table(data):
 class ScaleAdvAttack(object):
 
     def __init__(self, classifier: PyTorchClassifier, attacker: EvasionAttack, lib: SuppScalingLibraries,
-                 algo: SuppScalingAlgorithms, input_shape: Tuple, up_factor: int = 1, save: str = None):
+                 algo: SuppScalingAlgorithms, input_shape: Tuple, up_factor: float = 1, save: str = None):
         self.AA = AdvAttack(classifier, attacker)
         self.SA = ScaleAttack(lib, algo, allowed_changes=0.7, bandwidth=2)
         self.lib, self.algo, self.input_shape = lib, algo, input_shape
         self.lpips = LPIPS(net='alex', verbose=False).cuda()
         self.save = save
-        self.stats_file = os.path.join(save, 'stats.pkl')
+        self.stats_file = os.path.join(save, 'stats.pkl') if save else None
         self.up_factor = up_factor
+
+        if self.save:
+            os.makedirs(self.save, exist_ok=True)
 
     def generate(self, dataset: ImageFolderWithIndex, indices: Iterable[int]):
         stats = OrderedDict()
         for i in tqdm(indices):
             try:
                 stats[i] = self.generate_one(dataset, i)
-                pickle.dump(stats, open(self.stats_file, 'wb'))
+                if self.stats_file:
+                    pickle.dump(stats, open(self.stats_file, 'wb'))
                 print(i)
                 show_table(stats[i])
             except Exception as e:
