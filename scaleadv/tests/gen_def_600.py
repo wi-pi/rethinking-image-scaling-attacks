@@ -1,3 +1,6 @@
+import os
+import pickle
+
 import numpy as np
 from PIL import Image
 from attack.QuadrScaleAttack import QuadraticScaleAttack
@@ -17,6 +20,7 @@ OUTPUT_PATH = 'static/results/imagenet-600'
 LIB = SuppScalingLibraries.PIL
 ALGO = SuppScalingAlgorithms.NEAREST
 TGT_SHAPE = (224, 224, 3)
+FPM = 'fpm-cache-NEAREST.pkl'
 
 
 def save(obj, name):
@@ -29,7 +33,10 @@ if __name__ == '__main__':
     loader = DataLoader(dataset, batch_size=None, num_workers=8)
 
     # load static scaling tools
-    fpm = FourierPeakMatrixCollector(PeakMatrixMethod.optimization, ALGO, LIB)
+    if os.path.exists(FPM):
+        fpm = pickle.load(open(FPM, 'rb'))
+    else:
+        fpm = FourierPeakMatrixCollector(PeakMatrixMethod.optimization, ALGO, LIB)
     scl_attack = QuadraticScaleAttack(eps=1, verbose=False)
     scl_attack.optimize_runtime = True
 
@@ -60,3 +67,5 @@ if __name__ == '__main__':
         save(x_src_inp, f'{index}.src_inp')
         save(x_src_def, f'{index}.src_def')
         save(x_src_def_inp, f'{index}.src_def_inp')
+
+        pickle.dump(fpm, open(FPM, 'wb'))
