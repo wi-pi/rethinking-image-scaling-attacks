@@ -65,7 +65,7 @@ class ScaleAdvAttack(object):
                 print(e)
         return stats
 
-    def generate_one(self, dataset: ImageFolderWithIndex, index: int):
+    def generate_one(self, dataset: ImageFolderWithIndex, index: int, large_inp: np.ndarray = None):
         # load data
         _, x_img, y_true = dataset[index]
         new_width = int(x_img.width * self.up_factor)
@@ -76,9 +76,13 @@ class ScaleAdvAttack(object):
         # scale src to inp
         scaling = ScalingGenerator.create_scaling_approach(x_src.shape, self.input_shape, self.lib, self.algo)
         x_inp = scaling.scale_image(x_src)
+        if large_inp is None:
+            x_being_attacked = x_inp
+        else:
+            x_being_attacked = scaling.scale_image(large_inp)
 
         # process attack
-        x_adv = self.AA.generate(x_inp)
+        x_adv = self.AA.generate(x_being_attacked)
         x_scl, x_ada, defense, scaling = self.SA.generate(src=x_src, tgt=x_adv)
         x_src_def = defense.make_image_secure(x_src)
 
