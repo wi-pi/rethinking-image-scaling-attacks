@@ -32,6 +32,7 @@ if __name__ == '__main__':
     p.add_argument('-i', '--iter', type=int, required=True, help='PGD iterations.')
     p.add_argument('-t', '--tag', type=str, required=True, help='Tag for this run.')
     p.add_argument('--skip', type=int, default=50, help='Test on every SKIP examples.')
+    p.add_argument('--test', type=int, default=None, help='Test on a specific example.')
     args = p.parse_args()
     print(args)
 
@@ -56,7 +57,7 @@ if __name__ == '__main__':
 
     # test
     dataset = create_dataset(transform=None)
-    indices = range(0, len(dataset), args.skip)
+    indices = range(0, len(dataset), args.skip) if args.test is None else [args.test]
     stats = saa.generate(dataset, indices)
 
     # save stats

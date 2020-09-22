@@ -40,28 +40,32 @@ def show_table(data):
 class ScaleAdvAttack(object):
 
     def __init__(self, classifier: PyTorchClassifier, attacker: EvasionAttack, lib: SuppScalingLibraries,
-                 algo: SuppScalingAlgorithms, input_shape: Tuple, up_factor: int = 1, save: str = None):
+                 algo: SuppScalingAlgorithms, input_shape: Tuple, up_factor: float = 1, save: str = None):
         self.AA = AdvAttack(classifier, attacker)
         self.SA = ScaleAttack(lib, algo, allowed_changes=0.7, bandwidth=2)
         self.lib, self.algo, self.input_shape = lib, algo, input_shape
         self.lpips = LPIPS(net='alex', verbose=False).cuda()
         self.save = save
-        self.stats_file = os.path.join(save, 'stats.pkl')
+        self.stats_file = os.path.join(save, 'stats.pkl') if save else None
         self.up_factor = up_factor
+
+        if self.save:
+            os.makedirs(self.save, exist_ok=True)
 
     def generate(self, dataset: ImageFolderWithIndex, indices: Iterable[int]):
         stats = OrderedDict()
         for i in tqdm(indices):
             try:
                 stats[i] = self.generate_one(dataset, i)
-                pickle.dump(stats, open(self.stats_file, 'wb'))
+                if self.stats_file:
+                    pickle.dump(stats, open(self.stats_file, 'wb'))
                 print(i)
                 show_table(stats[i])
             except Exception as e:
                 print(e)
         return stats
 
-    def generate_one(self, dataset: ImageFolderWithIndex, index: int):
+    def generate_one(self, dataset: ImageFolderWithIndex, index: int, large_inp: np.ndarray = None):
         # load data
         _, x_img, y_true = dataset[index]
         new_width = int(x_img.width * self.up_factor)
@@ -72,9 +76,13 @@ class ScaleAdvAttack(object):
         # scale src to inp
         scaling = ScalingGenerator.create_scaling_approach(x_src.shape, self.input_shape, self.lib, self.algo)
         x_inp = scaling.scale_image(x_src)
+        if large_inp is None:
+            x_being_attacked = x_inp
+        else:
+            x_being_attacked = scaling.scale_image(large_inp)
 
         # process attack
-        x_adv = self.AA.generate(x_inp)
+        x_adv = self.AA.generate(x_being_attacked)
         x_scl, x_ada, defense, scaling = self.SA.generate(src=x_src, tgt=x_adv)
         x_src_def = defense.make_image_secure(x_src)
 
