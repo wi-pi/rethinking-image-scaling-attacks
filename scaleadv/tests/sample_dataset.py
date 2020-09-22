@@ -53,7 +53,11 @@ if __name__ == '__main__':
 
     # store data
     for (L, _), indices in DATA.items():
+        # size = int(INPUT_SIZE * (L + 0.5))
         for index in indices:
             src, y = dataset.imgs[index]
             dst = STORE / str(L).replace('.', '_') / f'{y:03d}'
             os.system(f'cp "{src}" "{str(dst)}"')
+            # _, x, y = dataset[index]
+            # dst = STORE / str(L).replace('.', '_') / f'{y:03d}' / Path(dataset.imgs[index][0]).name
+            # x.resize((size, size)).save(str(dst))

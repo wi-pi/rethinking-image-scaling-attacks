@@ -20,6 +20,9 @@ class ScaleAttack(object):
         self.lib, self.algo = lib, algo
         self.eps, self.bw, self.modi = eps, bandwidth, allowed_changes
         self.verbose = verbose
+        self.collector = FourierPeakMatrixCollector(PeakMatrixMethod.optimization, self.algo, self.lib)
+        self.scl_attack = QuadraticScaleAttack(eps=self.eps, verbose=self.verbose)
+        self.scl_attack.optimize_runtime = True
 
     def generate(self, src: np.ndarray, tgt: np.ndarray):
         self._validate(src)
@@ -27,14 +30,13 @@ class ScaleAttack(object):
 
         # scaling attack
         scl_method = ScalingGenerator.create_scaling_approach(src.shape, tgt.shape, self.lib, self.algo)
-        scl_attack = QuadraticScaleAttack(eps=self.eps, verbose=self.verbose)
-        scl, _, _ = scl_attack.attack(src, tgt, scl_method)
+        scl, _, _ = self.scl_attack.attack(src, tgt, scl_method)
 
         # adaptive scaling attack
         defense = PreventionDefenseGenerator.create_prevention_defense(
             defense_type=PreventionTypeDefense.medianfiltering,
             scaler_approach=scl_method,
-            fourierpeakmatrixcollector=FourierPeakMatrixCollector(PeakMatrixMethod.optimization, self.algo, self.lib),
+            fourierpeakmatrixcollector=self.collector,
             bandwidth=self.bw,
             verbose_flag=self.verbose,
             usecythonifavailable=True
