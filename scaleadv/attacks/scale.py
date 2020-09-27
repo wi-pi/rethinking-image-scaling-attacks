@@ -24,7 +24,7 @@ class ScaleAttack(object):
         self.scl_attack = QuadraticScaleAttack(eps=self.eps, verbose=self.verbose)
         self.scl_attack.optimize_runtime = True
 
-    def generate(self, src: np.ndarray, tgt: np.ndarray):
+    def generate(self, src: np.ndarray, tgt: np.ndarray, defense_type: PreventionTypeDefense):
         self._validate(src)
         self._validate(tgt)
 
@@ -34,7 +34,7 @@ class ScaleAttack(object):
 
         # adaptive scaling attack
         defense = PreventionDefenseGenerator.create_prevention_defense(
-            defense_type=PreventionTypeDefense.medianfiltering,
+            defense_type=defense_type,
             scaler_approach=scl_method,
             fourierpeakmatrixcollector=self.collector,
             bandwidth=self.bw,
@@ -42,7 +42,7 @@ class ScaleAttack(object):
             usecythonifavailable=True
         )
         adaptive_attack = AdaptiveAttackPreventionGenerator.create_adaptive_attack(
-            defense_type=PreventionTypeDefense.medianfiltering,
+            defense_type=defense_type,
             scaler_approach=scl_method,
             preventiondefense=defense,
             verbose_flag=self.verbose,

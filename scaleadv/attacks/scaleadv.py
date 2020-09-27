@@ -12,6 +12,7 @@ from PIL import Image
 from art.attacks import EvasionAttack
 from art.attacks.evasion import ProjectedGradientDescentPyTorch
 from art.estimators.classification import PyTorchClassifier
+from defenses.prevention.PreventionDefenseType import PreventionTypeDefense
 from lpips import LPIPS
 from prettytable import PrettyTable
 from scaling.ScalingApproach import ScalingApproach
@@ -46,11 +47,14 @@ class ScaleAdvAttack(object):
         self.lib, self.algo, self.input_shape = lib, algo, input_shape
         self.lpips = LPIPS(net='alex', verbose=False).cuda()
         self.save = save
-        self.stats_file = os.path.join(save, 'stats.pkl') if save else None
         self.up_factor = up_factor
 
         if self.save:
             os.makedirs(self.save, exist_ok=True)
+
+    @property
+    def stats_file(self):
+        return os.path.join(self.save, 'stats.pkl') if self.save else None
 
     def generate(self, dataset: ImageFolderWithIndex, indices: Iterable[int]):
         stats = OrderedDict()
@@ -65,7 +69,9 @@ class ScaleAdvAttack(object):
                 print(e)
         return stats
 
-    def generate_one(self, dataset: ImageFolderWithIndex, index: int, large_inp: np.ndarray = None):
+    def generate_one(self, dataset: ImageFolderWithIndex, index: int, large_inp: np.ndarray = None,
+                     defense_type: PreventionTypeDefense = PreventionTypeDefense.medianfiltering,
+                     get_defense: int = 0):
         # load data
         _, x_img, y_true = dataset[index]
         new_width = int(x_img.width * self.up_factor)
@@ -83,7 +89,7 @@ class ScaleAdvAttack(object):
 
         # process attack
         x_adv = self.AA.generate(x_being_attacked)
-        x_scl, x_ada, defense, scaling = self.SA.generate(src=x_src, tgt=x_adv)
+        x_scl, x_ada, defense, scaling = self.SA.generate(src=x_src, tgt=x_adv, defense_type=defense_type)
         x_src_def = defense.make_image_secure(x_src)
 
         # generate full results
@@ -107,6 +113,16 @@ class ScaleAdvAttack(object):
             stats[name] = self._evaluate(x_src, var, scaling)
             self._save_fig(var, f'{index}.{name}')
 
+        # get src with defense
+        if get_defense:
+            x_src_def = np.zeros_like(x_src_def, dtype=np.float32)
+            for _ in range(get_defense):
+                x_src_def = x_src_def + defense.make_image_secure(x_src)
+            x_src_def = (x_src_def / get_defense).round().astype(np.uint8)
+            self._save_fig(x_src_def, f'{index}.x_src_def_{get_defense}')
+
+        if get_defense:
+            return stats, x_src_def
         return stats
 
     def _save_fig(self, x: np.ndarray, name: str):
@@ -145,7 +161,7 @@ if __name__ == '__main__':
         resnet50(pretrained=True)
     ).eval()
     classifier = PyTorchClassifier(model, nn.CrossEntropyLoss(), (3, 224, 224), 1000, clip_values=(0., 1.))
-    attacker = ProjectedGradientDescentPyTorch(classifier, np.inf, 8/255., 1/255., max_iter=20)
+    attacker = ProjectedGradientDescentPyTorch(classifier, np.inf, 8 / 255., 1 / 255., max_iter=20)
 
     # load SA
     lib = SuppScalingLibraries.PIL
