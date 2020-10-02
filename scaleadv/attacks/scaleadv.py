@@ -83,12 +83,16 @@ class ScaleAdvAttack(object):
         scaling = ScalingGenerator.create_scaling_approach(x_src.shape, self.input_shape, self.lib, self.algo)
         x_inp = scaling.scale_image(x_src)
         if large_inp is None:
-            x_being_attacked = x_inp
+            x_adv = self.AA.generate(x_inp)
         else:
-            x_being_attacked = scaling.scale_image(large_inp)
+            if large_inp.ndim == 4:
+                x_being_attacked = np.stack(list(map(scaling.scale_image, large_inp)))
+                x_adv = self.AA.generate(x_inp, x_being_attacked)
+            else:
+                x_being_attacked = scaling.scale_image(large_inp)
+                x_adv = self.AA.generate(x_being_attacked)
 
         # process attack
-        x_adv = self.AA.generate(x_being_attacked)
         x_scl, x_ada, defense, scaling = self.SA.generate(src=x_src, tgt=x_adv, defense_type=defense_type)
         x_src_def = defense.make_image_secure(x_src)
 
@@ -115,11 +119,10 @@ class ScaleAdvAttack(object):
 
         # get src with defense
         if get_defense:
-            x_src_def = np.zeros_like(x_src_def, dtype=np.float32)
+            x_src_def = []
             for _ in range(get_defense):
-                x_src_def = x_src_def + defense.make_image_secure(x_src)
-            x_src_def = (x_src_def / get_defense).round().astype(np.uint8)
-            self._save_fig(x_src_def, f'{index}.x_src_def_{get_defense}')
+                x_src_def.append(defense.make_image_secure(x_src))
+            x_src_def = np.stack(x_src_def)
 
         if get_defense:
             return stats, x_src_def

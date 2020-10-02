@@ -2,8 +2,9 @@ import numpy as np
 import torch.nn as nn
 import torchvision.transforms as T
 from art.attacks.attack import EvasionAttack
-from art.attacks.evasion import ProjectedGradientDescentPyTorch
+from art.attacks.evasion import ShadowAttack
 from art.estimators.classification import PyTorchClassifier
+from torch.nn import DataParallel
 from torchvision.models import resnet50
 
 from scaleadv.datasets.imagenet import create_dataset, IMAGENET_MEAN, IMAGENET_STD
@@ -38,10 +39,13 @@ class AdvAttack(object):
         pred = self.classifier.predict(x)
         return pred.argmax(1)[0], pred
 
-    def generate(self, x: np.ndarray):
+    def generate(self, x: np.ndarray, target: np.ndarray = None):
         self._validate(x)
         x = _to_batch(x)
-        x_adv = self.attacker.generate(x)
+        if target is not None:
+            x_adv = self.attacker.generate(x, target)
+        else:
+            x_adv = self.attacker.generate(x)
         return _to_single(x_adv)
 
     def _validate(self, x: np.ndarray):
@@ -53,19 +57,18 @@ class AdvAttack(object):
 def test():
     # load data
     dataset = create_dataset(transform=T.Resize((224, 224)))
-    _, x, y = dataset[1000]
+    _, x, y = dataset[5000]
     x = np.array(x)
 
     # load classifier
-    model = nn.Sequential(
-        NormalizationLayer(IMAGENET_MEAN, IMAGENET_STD),
-        resnet50(pretrained=True)
-    ).eval()
+    model = nn.Sequential(NormalizationLayer(IMAGENET_MEAN, IMAGENET_STD), resnet50(pretrained=True)).eval()
+    model = DataParallel(model).cuda()
     classifier = PyTorchClassifier(model, nn.CrossEntropyLoss(), (3, 224, 224), 1000, clip_values=(0., 1.))
 
     # load attacker
     # TODO: Support targeted attack.
-    attacker = ProjectedGradientDescentPyTorch(classifier, np.inf, 0.03, 0.007, max_iter=10)
+    # attacker = ProjectedGradientDescentPyTorch(classifier, np.inf, 0.03, 0.007, max_iter=10)
+    attacker = ShadowAttack(classifier, sigma=0.2, lambda_tv=0.3, lambda_s=0.5)
     aa = AdvAttack(classifier, attacker)
 
     # evaluate
@@ -75,6 +78,9 @@ def test():
     print('True', y)
     print('Pred', y_pred)
     print('Evil', y_evil)
+
+    from PIL import Image
+    Image.fromarray(x_evil).save('shadow.png')
 
 
 if __name__ == '__main__':

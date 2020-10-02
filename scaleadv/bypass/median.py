@@ -43,11 +43,12 @@ import os
 import numpy as np
 import torch.nn as nn
 from PIL import Image
-from art.attacks.evasion import ProjectedGradientDescentPyTorch
+from art.attacks.evasion import ProjectedGradientDescentPyTorch, ShadowAttack
 from art.estimators.classification import PyTorchClassifier
 from defenses.prevention.PreventionDefenseType import PreventionTypeDefense
 from scaling.SuppScalingAlgorithms import SuppScalingAlgorithms
 from scaling.SuppScalingLibraries import SuppScalingLibraries
+from torch.nn import DataParallel
 from torchvision.models import resnet50
 
 from scaleadv.attacks.scaleadv import ScaleAdvAttack, show_table
@@ -63,7 +64,8 @@ STEP = 20
 EPSILON = 20
 EPSILON_STR = '20'
 SIGMA = EPSILON * 2.5 / STEP
-OUTPUT = f'static/results/bypass/median/L{NORM_STR}-{EPSILON_STR}'
+#OUTPUT = f'static/results/bypass/median/L{NORM_STR}-{EPSILON_STR}'
+OUTPUT = f'static/results/bypass/median/shadow'
 
 if __name__ == '__main__':
     # load data
@@ -71,9 +73,11 @@ if __name__ == '__main__':
     _, x_src, y_src = dataset[ID]
 
     # load SAA
-    model = nn.Sequential(NormalizationLayer(IMAGENET_MEAN, IMAGENET_STD), resnet50(pretrained=True)).eval().cuda()
+    model = nn.Sequential(NormalizationLayer(IMAGENET_MEAN, IMAGENET_STD), resnet50(pretrained=True)).eval()
+    model = DataParallel(model).cuda()
     classifier = PyTorchClassifier(model, nn.CrossEntropyLoss(), (3, 224, 224), 1000, clip_values=(0., 1.))
-    attacker = ProjectedGradientDescentPyTorch(classifier, NORM, EPSILON, SIGMA, max_iter=STEP)
+    #attacker = ProjectedGradientDescentPyTorch(classifier, NORM, EPSILON, SIGMA, max_iter=STEP)
+    attacker = ShadowAttack(classifier, sigma=0.02, batch_size=300, lambda_tv=0.5, lambda_s=1.0)
     SAA = ScaleAdvAttack(classifier, attacker, LIB, ALGO, (224, 224, 3), save=None)
     defense = PreventionTypeDefense.medianfiltering
 
