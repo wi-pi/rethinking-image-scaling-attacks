@@ -26,8 +26,7 @@ class SmoothAttack:
     def perturb(self, x: torch.Tensor, y: int, sigma: float = 0.5, batch: int = 400, steps: int = 300,
                 duplicate_rgb: bool = False, lr: float = 0.1, tv_lam: float = 0.1, ch_lam: float = 20.0,
                 dissim_lam: float = 10.0, print_stats: bool = False, **_) -> torch.Tensor:
-        print('Ignored args are: ', _)
-        torch.manual_seed(6247423)
+        #torch.manual_seed(6247423)
 
         t = torch.rand_like(x[0] if duplicate_rgb else x).cuda() - 0.5
         t.requires_grad_()
@@ -59,7 +58,7 @@ class SmoothAttack:
                 j_print(i, acc, loss, cl_loss, tv_loss, col_loss, dissim_loss)
 
         ct = t.repeat((3, 1, 1)) if duplicate_rgb else t
-        from IPython import embed; embed(using=False); exit()
+        ct = ct.to(x.device)
         return torch.clamp((x + ct).data, 0.0, 1.0)
 
 
