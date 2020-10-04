@@ -26,7 +26,7 @@ def save(name, t):
 
 
 if __name__ == '__main__':
-    ID = 10000
+    ID = 5000
     pth = 'static/results/experiments/shadow_simple'
     os.makedirs(pth, exist_ok=True)
 
@@ -43,24 +43,29 @@ if __name__ == '__main__':
     classifier = PyTorchClassifier(model, nn.CrossEntropyLoss(), (3, 224, 224), 1000, clip_values=(0., 1.))
 
     # load attack
-    SIGMA = 0.1
+    SIGMA = 0.3
     STEP = 300
     BATCH = 400
-    art_attack = ShadowAttack_ART(classifier, sigma=SIGMA, nb_steps=STEP, batch_size=BATCH, targeted=False)
+    LR = 0.1
+    art_attack = ShadowAttack_ART(classifier, sigma=SIGMA, nb_steps=STEP, learning_rate=LR, batch_size=BATCH, targeted=False)
     off_attack = ShadowAttack_Official(model)
 
     # test benign (need [BCHW] ndarray)
     print('y_pred', classifier.predict(x).argmax(1))
-    for _ in range(10):
+    print('y_pred_noise', end='\t')
+    for _ in range(20):
         x_noise = x + np.random.normal(scale=SIGMA, size=x.shape).astype(x.dtype)
-        print('y_pred_noise', classifier.predict(x_noise).argmax(1))
+        print(classifier.predict(x_noise).argmax(1)[0], end=' ')
+    print()
 
     # test art (need [BCHW] ndarray)
     x_adv = art_attack.generate(x)
     print('y_adv', classifier.predict(x_adv).argmax(1))
-    for _ in range(10):
+    print('y_adv_noise', end='\t')
+    for _ in range(20):
         x_adv_noise = x_adv + np.random.normal(scale=SIGMA, size=x_adv.shape).astype(x_adv.dtype)
-        print('y_adv_noise', classifier.predict(x_adv_noise).argmax(1))
+        print(classifier.predict(x_adv_noise).argmax(1)[0], end=' ')
+    print()
     save(f'{pth}/{ID}_adv_art.png', x_adv[0])
     exit()
 
@@ -70,7 +75,7 @@ if __name__ == '__main__':
     x_adv = off_attack.perturb(x_inp, y, sigma=SIGMA, batch=BATCH, print_stats=True)
     x_adv = np.array(x_adv)[None, ...]
     print('y_adv', classifier.predict(x_adv).argmax(1))
-    for _ in range(10):
+    for _ in range(20):
         x_adv_noise = x_adv + np.random.normal(scale=SIGMA, size=x_adv.shape).astype(x_adv.dtype)
         print('y_adv_noise', classifier.predict(x_adv_noise).argmax(1))
     save(f'{pth}/{ID}_inp.png', x_inp)
