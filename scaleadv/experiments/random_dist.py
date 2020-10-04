@@ -1,5 +1,7 @@
-import matplotlib.pyplot as plt
+import concurrent.futures
 import os
+
+import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from attack.QuadrScaleAttack import QuadraticScaleAttack
@@ -9,11 +11,11 @@ from defenses.prevention.PreventionDefenseType import PreventionTypeDefense
 from scaling.ScalingGenerator import ScalingGenerator
 from scaling.SuppScalingAlgorithms import SuppScalingAlgorithms
 from scaling.SuppScalingLibraries import SuppScalingLibraries
-from tqdm import trange
+from tqdm import tqdm
 
 from scaleadv.datasets.imagenet import create_dataset
 
-ID = 10000
+ID = 20000
 LIB = SuppScalingLibraries.CV
 ALGO = SuppScalingAlgorithms.CUBIC
 TAG = 'cv_cubic'
@@ -40,13 +42,22 @@ if __name__ == '__main__':
     )
 
     # test
-    data = []
-    for _ in trange(100):
+    x_inp = scaling.scale_image(x_src)
+
+
+    def get_diff(_):
         x_def = defense.make_image_secure(x_src)
-        diff = 0. + x_src - x_def
-        data.append(diff.copy())
+        x_def_inp = scaling.scale_image(x_def)
+        diff = 0. + x_inp - x_def_inp
+        return diff.copy()
+
+
+    N = 140
+    defense.make_image_secure(x_src)
+    with concurrent.futures.ProcessPoolExecutor() as exe:
+        output = list(tqdm(exe.map(get_diff, range(N)), total=N))
+    data = np.concatenate(output)
 
     # plot
-    data = np.concatenate(data)
-    sns.distplot(data, bins=100)
+    sns.distplot(data)
     plt.savefig(f'{OUTPUT}/{ID}.{TAG}.pdf')
