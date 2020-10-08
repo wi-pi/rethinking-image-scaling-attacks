@@ -226,3 +226,9 @@ modules.xml
 .idea/sonarlint
 
 # End of https://www.toptal.com/developers/gitignore/api/pycharm+all
+
+# Static files
+.DS_Store
+*.png
+*.npy
+*.pdf
