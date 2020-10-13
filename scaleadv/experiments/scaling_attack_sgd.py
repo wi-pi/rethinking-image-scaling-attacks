@@ -1,51 +1,22 @@
-import numpy as np
 import torch
-import torchvision.transforms.functional as F
+import numpy as np
+import numpy.linalg as LA
+import torch
 import torch.nn as nn
-import torchvision.transforms as T
+import torchvision.transforms.functional as F
 from PIL import Image
-from scaling.ScalingApproach import ScalingApproach
+from attack.QuadrScaleAttack import QuadraticScaleAttack
+from defenses.detection.fourier.FourierPeakMatrixCollector import FourierPeakMatrixCollector, PeakMatrixMethod
 from scaling.ScalingGenerator import ScalingGenerator
 from scaling.SuppScalingAlgorithms import SuppScalingAlgorithms
 from scaling.SuppScalingLibraries import SuppScalingLibraries
 from torch.autograd import Variable
+from tqdm import trange
 
 from scaleadv.bypass.random import resize_to_224x
 from scaleadv.datasets.imagenet import create_dataset
-import numpy as np
-from PIL import Image
-from attack.QuadrScaleAttack import QuadraticScaleAttack
-from attack.adaptive_attack.AdaptiveAttackPreventionGenerator import AdaptiveAttackPreventionGenerator
-from defenses.detection.fourier.FourierPeakMatrixCollector import FourierPeakMatrixCollector, PeakMatrixMethod
-from defenses.prevention.PreventionDefenseGenerator import PreventionDefenseGenerator
-from defenses.prevention.PreventionDefenseType import PreventionTypeDefense
-from scaling.ScalingGenerator import ScalingGenerator
-from scaling.SuppScalingAlgorithms import SuppScalingAlgorithms
-from scaling.SuppScalingLibraries import SuppScalingLibraries
+from scaleadv.models.layers import MedianPool2d
 
-from scaleadv.datasets.imagenet import create_dataset
-from concurrent.futures import as_completed
-from concurrent.futures.process import ProcessPoolExecutor
-from itertools import product
-
-import cvxpy as cp
-import numpy as np
-import numpy.linalg as LA
-import torch.nn as nn
-from PIL import Image
-from art.attacks.evasion import ProjectedGradientDescentPyTorch
-from art.estimators.classification import PyTorchClassifier
-from attack.area_attack.AreaNormEnumType import AreaNormEnumType
-from scaling.ScalingGenerator import ScalingGenerator
-from scaling.SuppScalingAlgorithms import SuppScalingAlgorithms
-from scaling.SuppScalingLibraries import SuppScalingLibraries
-from torchvision.models import resnet50
-from tqdm import tqdm, trange
-
-from scaleadv.bypass.random import resize_to_224x
-from scaleadv.datasets.imagenet import IMAGENET_MEAN, IMAGENET_STD
-from scaleadv.datasets.imagenet import create_dataset
-from scaleadv.models.layers import NormalizationLayer
 
 class ScalingNet(nn.Module):
 
@@ -61,7 +32,7 @@ class ScalingNet(nn.Module):
 if __name__ == '__main__':
     TAG = 'SGD'
     RUN_CVX = False
-    RUN_SGD = True
+    RUN_SGD = False
     # load data
     dataset = create_dataset(transform=None)
     _, src, _ = dataset[5000]
@@ -118,8 +89,28 @@ if __name__ == '__main__':
         Image.fromarray(att).save(f'{TAG}.sgd-attack.png')
         Image.fromarray(att_inp).save(f'{TAG}.sgd-attack-inp.png')
 
+    # get modified pixel's mask
+    cl, cr = scaling.cl_matrix, scaling.cr_matrix
+    cli, cri = map(LA.pinv, [cl, cr])
+    mask = np.round(cli @ np.ones((224, 224)) @ cri).astype(np.uint8)
 
+    # global median filter
+    x = F.to_tensor(Image.open('SGD.sgd-attack.png'))[None, ...]
+    F.to_pil_image(MedianPool2d(9, 1, 4)(x)[0]).save('ss-global-9.png')
 
+    # selective median filter
+    x_f = MedianPool2d(9, 1, 4)(x)
+    x_o = x * (1 - mask) + x_f * mask
+    F.to_pil_image(x_o[0].float()).save('ss-select-9-mask.png')
 
+    # selective median filter with mask-out
+    mask_l, mask_h = mask.copy(), mask.copy()
+    mask_l[0::2, 0::2] = mask_l[1::2, 1::2] = 0
+    mask_h[1::2, 0::2] = mask_h[0::2, 1::2] = 0
 
-
+    x_f = x.clone()
+    x_f[(slice(None),) * 2 + mask_l.nonzero()] = 0
+    x_f[(slice(None),) * 2 + mask_h.nonzero()] = 1
+    x_f = MedianPool2d(9, 1, 4)(x_f)
+    x_o = x * (1 - mask) + x_f * mask
+    F.to_pil_image(x_o[0].float()).save('ss-select-9-maskout.png')
