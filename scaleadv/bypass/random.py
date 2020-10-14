@@ -74,10 +74,10 @@ def show(caption: str, pred: np.ndarray, y: int, k: List[int]):
     print(caption, ' '.join([f'{a:.2%}' for a in acc]))
 
 
-def resize_to_224x(img):
+def resize_to_224x(img, more=1):
     w, h = img.size
-    w = 224 * ceil(w / 224)
-    h = 224 * ceil(h / 224)
+    w = 224 * ceil(w / 224) * more
+    h = 224 * ceil(h / 224) * more
     return img.resize((w, h))
 
 
