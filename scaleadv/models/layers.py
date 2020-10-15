@@ -21,7 +21,6 @@ class NormalizationLayer(nn.Module):
         return f'NormalizationLayer(mean={self.mean}, std={self.std})'
 
 
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -71,4 +70,33 @@ class MedianPool2d(nn.Module):
         x = F.pad(x, self._padding(x), mode='reflect')
         x = x.unfold(2, self.k[0], self.stride[0]).unfold(3, self.k[1], self.stride[1])
         x = x.contiguous().view(x.size()[:4] + (-1,)).median(dim=-1)[0]
+        return x
+
+
+class RandomPool2d(MedianPool2d):
+
+    def __init__(self, *args, **kwargs):
+        super(RandomPool2d, self).__init__(*args, **kwargs)
+
+    def _gen_idx(self, n, gap, shape, expand=False):
+        B, C, H, W = shape
+        # get index of valid pixels (kernel center)
+        idx = torch.arange(n)
+        if expand:
+            idx = idx[:, None]
+        idx = idx + gap + torch.randint(-gap, gap + 1, (B, H, W))
+        # duplicate along channel
+        idx = idx[:, None, ...].repeat(1, C, 1, 1).flatten()
+        return idx
+
+    def forward(self, x):
+        padding = pl, _, pt, _ = self._padding(x)
+        in_shape = B, C, H, W = x.shape  # Note this is the shape of x BEFORE padding.
+        # generate index
+        idx_c = torch.arange(B * C)[:, None].repeat(1, H * W).flatten()
+        idx_h = self._gen_idx(H, pt, in_shape, expand=True)
+        idx_w = self._gen_idx(W, pl, in_shape, expand=False)
+        # padding & take
+        x = F.pad(x, padding, mode='reflect')
+        x = x.view(-1, *x.shape[2:])[idx_c, idx_h, idx_w].view(in_shape)
         return x

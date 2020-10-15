@@ -16,7 +16,8 @@ from tqdm import trange
 
 from scaleadv.bypass.random import resize_to_224x
 from scaleadv.datasets.imagenet import create_dataset
-from scaleadv.models.layers import MedianPool2d
+from scaleadv.models.layers import MedianPool2d, RandomPool2d
+from scaleadv.models.parallel import BalancedDataParallel
 
 
 class ScalingNet(nn.Module):
@@ -33,8 +34,19 @@ class ScalingNet(nn.Module):
 if __name__ == '__main__':
     TAG = 'SGD'
     RUN_CVX = False
-    RUN_SGD = False
-    RUN_ADA = True
+    RUN_SGD = True
+    RUN_ADA = False
+    RUN_MEDIAN_DEF = False
+    RUN_RANDOM_DEF = True
+
+    if RUN_MEDIAN_DEF:
+        defense = 'median'
+        filter = MedianPool2d(9, 1, 4)
+    elif RUN_RANDOM_DEF:
+        defense = 'random'
+        filter = BalancedDataParallel(10, RandomPool2d(9, 1, 4))
+    else:
+        raise NotImplementedError
 
     # load data
     dataset = create_dataset(transform=None)
@@ -46,7 +58,7 @@ if __name__ == '__main__':
 
     # load scaling & scaled target image
     lib = SuppScalingLibraries.CV
-    algo = SuppScalingAlgorithms.LINEAR
+    algo = SuppScalingAlgorithms.AREA
     scaling = ScalingGenerator.create_scaling_approach(x_src.shape, (224, 224, 4), lib, algo)
     x_tgt = scaling.scale_image(x_tgt)
 
@@ -101,17 +113,18 @@ if __name__ == '__main__':
     """The following snippet implements adaptive scaling-attack with torch
     """
     if RUN_ADA:
+        n = 1 if defense == 'median' else 70
         att_proxy = Variable(torch.zeros_like(src), requires_grad=True)
         mask_t = torch.tensor(mask, dtype=torch.float32).to(att_proxy.device)
         optimizer = torch.optim.Adam([att_proxy], lr=0.01)
-        with trange(1000) as pbar:
+        with trange(100) as pbar:
             for _ in pbar:
                 att = (att_proxy.tanh() + 1) * 0.5
-                att_def = att * (1 - mask_t) + MedianPool2d(9, 1, 4)(att[None, ...])[0] * mask_t
+                att_def = att * (1 - mask_t) + filter(att.repeat(n, 1, 1, 1)) * mask_t
                 out = model(att_def)
                 loss1 = diff(src, att)
                 loss2 = diff_l1(tgt, out)
-                loss3 = 0.1 * (get_color(src - att) + get_sim(src - att))
+                loss3 = torch.tensor(0)#0.1 * (get_color(src - att) + get_sim(src - att))
                 loss = loss1 + loss2 + loss3
                 optimizer.zero_grad()
                 loss.backward()
@@ -126,24 +139,26 @@ if __name__ == '__main__':
         F.to_pil_image(att.cpu()).save(f'{TAG}.adaptive.png')
 
 
+
     """The following snippet implements median-defense with torch
     """
-    att_name = f'{TAG}.adaptive'
+    att_name = f'{TAG}.attack'
     att = Image.open(f'{att_name}.png')
     x = F.to_tensor(att)[None, ...]
+    filter = RandomPool2d(9, 1, 4)
 
     # global median filter
-    x_o = F.to_pil_image(MedianPool2d(9, 1, 4)(x)[0])
-    x_o.save(f'{att_name}.global-def.png')
+    x_o = F.to_pil_image(filter(x)[0])
+    x_o.save(f'{att_name}.global-{defense}.png')
     x_o_inp = scaling.scale_image(np.array(x_o))
-    Image.fromarray(x_o_inp).save(f'{att_name}.global-def-inp.png')
+    Image.fromarray(x_o_inp).save(f'{att_name}.global-{defense}-inp.png')
 
     # selective median filter
-    x_o = x * (1 - mask) + MedianPool2d(9, 1, 4)(x) * mask
+    x_o = x * (1 - mask) + filter(x) * mask
     x_o = F.to_pil_image(x_o[0].float())
-    x_o.save(f'{att_name}.select-def.png')
+    x_o.save(f'{att_name}.select-{defense}.png')
     x_o_inp = scaling.scale_image(np.array(x_o))
-    Image.fromarray(x_o_inp).save(f'{att_name}.select-def-inp.png')
+    Image.fromarray(x_o_inp).save(f'{att_name}.select-{defense}-inp.png')
 
     # selective median filter with mask-out
     mask_l, mask_h = mask.copy(), mask.copy()
@@ -153,9 +168,9 @@ if __name__ == '__main__':
     x_f = x.clone()
     x_f[(slice(None),) * 2 + mask_l.nonzero()] = 0
     x_f[(slice(None),) * 2 + mask_h.nonzero()] = 1
-    x_f = MedianPool2d(9, 1, 4)(x_f)
+    x_f = filter(x_f)
     x_o = x * (1 - mask) + x_f * mask
     x_o = F.to_pil_image(x_o[0].float())
-    x_o.save(f'{att_name}.select-mask.png')
+    x_o.save(f'{att_name}.select-{defense}-mask.png')
     x_o_inp = scaling.scale_image(np.array(x_o))
-    Image.fromarray(x_o_inp).save(f'{att_name}.select-mask-inp.png')
+    Image.fromarray(x_o_inp).save(f'{att_name}.select-{defense}-mask-inp.png')
