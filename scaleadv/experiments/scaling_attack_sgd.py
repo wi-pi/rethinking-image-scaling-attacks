@@ -1,23 +1,24 @@
-import torch
 import numpy as np
 import numpy.linalg as LA
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as F
 from PIL import Image
-from RandomizedSmoothing.utils.regularizers import get_color, get_sim, get_tv
+from art.attacks.evasion import ProjectedGradientDescentPyTorch
+from art.estimators.classification import PyTorchClassifier
 from attack.QuadrScaleAttack import QuadraticScaleAttack
 from defenses.detection.fourier.FourierPeakMatrixCollector import FourierPeakMatrixCollector, PeakMatrixMethod
 from scaling.ScalingGenerator import ScalingGenerator
 from scaling.SuppScalingAlgorithms import SuppScalingAlgorithms
 from scaling.SuppScalingLibraries import SuppScalingLibraries
 from torch.autograd import Variable
+from torchvision.models import resnet50
 from tqdm import trange
 
 from scaleadv.bypass.random import resize_to_224x
-from scaleadv.datasets.imagenet import create_dataset
+from scaleadv.datasets.imagenet import create_dataset, IMAGENET_MEAN, IMAGENET_STD
 from scaleadv.models.layers import MedianPool2d, RandomPool2d
-from scaleadv.models.parallel import BalancedDataParallel
+from scaleadv.models.layers import NormalizationLayer
 
 
 class ScalingNet(nn.Module):
@@ -31,20 +32,32 @@ class ScalingNet(nn.Module):
         return self.cl @ inp @ self.cr
 
 
+def predict(inp):
+    if isinstance(inp, torch.Tensor):
+        inp = inp.detach().cpu()
+    return classifier.predict(inp).argmax(1)
+
+
+def l2_loss(x, y):
+    return (x - y).norm((1, 2, 3)).mean()
+
+
 if __name__ == '__main__':
-    TAG = 'SGD'
+    TAG = 'ADV-RANDOM'
+    RUN_ADV = False
     RUN_CVX = False
     RUN_SGD = True
-    RUN_ADA = False
+    RUN_ADA = True
     RUN_MEDIAN_DEF = False
     RUN_RANDOM_DEF = True
 
     if RUN_MEDIAN_DEF:
         defense = 'median'
-        filter = MedianPool2d(9, 1, 4)
+        filter = MedianPool2d(7, 1, 3)
     elif RUN_RANDOM_DEF:
         defense = 'random'
-        filter = BalancedDataParallel(10, RandomPool2d(9, 1, 4))
+        # filter = BalancedDataParallel(10, RandomPool2d(7, 1, 3))
+        filter = RandomPool2d(7, 1, 3)
     else:
         raise NotImplementedError
 
@@ -52,20 +65,28 @@ if __name__ == '__main__':
     dataset = create_dataset(transform=None)
     _, src, _ = dataset[5000]
     _, tgt, _ = dataset[1000]
-    src = resize_to_224x(src, more=2)
+    src = resize_to_224x(src, more=1)
     x_src = np.array(src)
     x_tgt = np.array(tgt)
 
     # load scaling & scaled target image
     lib = SuppScalingLibraries.CV
-    algo = SuppScalingAlgorithms.AREA
+    algo = SuppScalingAlgorithms.LINEAR
     scaling = ScalingGenerator.create_scaling_approach(x_src.shape, (224, 224, 4), lib, algo)
     x_tgt = scaling.scale_image(x_tgt)
+
+    # save src
+    src.save(f'{TAG}.src.png')
+    Image.fromarray(scaling.scale_image(x_src)).save(f'{TAG}.src-inp.png')
 
     # get modified pixel's mask
     cl, cr = scaling.cl_matrix, scaling.cr_matrix
     cli, cri = map(LA.pinv, [cl, cr])
     mask = np.round(cli @ np.ones((224, 224)) @ cri).astype(np.uint8)
+
+    # load art proxy
+    model_cls = nn.Sequential(NormalizationLayer(IMAGENET_MEAN, IMAGENET_STD), resnet50(pretrained=True)).eval().cuda()
+    classifier = PyTorchClassifier(model_cls, nn.CrossEntropyLoss(), (3, 224, 224), 1000, clip_values=(0., 1.))
 
     """The following snippet implement scaling-attack with cvxpy
     """
@@ -80,97 +101,139 @@ if __name__ == '__main__':
         Image.fromarray(x_scl_cvx).save(f'{TAG}.cvx-attack.png')
         Image.fromarray(x_scl_cvx_inp).save(f'{TAG}.cvx-attack-inp.png')
 
+    """The following snippet implements adv-attack with art
+    """
+    if RUN_ADV:
+        NORM, SIGMA, STEP = np.inf, 8 / 255, 30
+        # NORM, SIGMA, STEP = 2, 10, 30
+        attack = ProjectedGradientDescentPyTorch(classifier, NORM, SIGMA, SIGMA * 2.5 / STEP, max_iter=STEP,
+                                                 targeted=True)
+        x = F.to_tensor(scaling.scale_image(x_src))[None, ...]
+        print('y_pred', predict(x))
+        y_tgt = np.eye(1000, dtype=np.int)[None, 200]
+        x_adv = attack.generate(x, y_tgt)
+        print('y_adv', predict(x_adv))
+        Image.fromarray(np.array(x_adv[0] * 255).round().astype(np.uint8).transpose((1, 2, 0))).save(f'{TAG}.adv.png')
+
     """The following snippet implements scaling-attack with torch
     """
     # load network
     model = ScalingNet(scaling.cl_matrix, scaling.cr_matrix).eval().cuda()
-    diff = nn.MSELoss()
-    diff_l1 = nn.L1Loss()
+    diff = nn.MSELoss(reduction='mean')
+    diff_l1 = nn.L1Loss(reduction='mean')
     src, tgt = map(lambda x: F.to_tensor(x).cuda(), [x_src, x_tgt])
+    if RUN_ADV:
+        tgt = torch.tensor(x_adv[0], dtype=torch.float32).cuda()
 
     # attack
     if RUN_SGD:
-        att_proxy = Variable(torch.zeros_like(src), requires_grad=True)
+        print('SRC:', src.shape, src.min().cpu().item(), src.max().cpu().item())
+        print('TGT:', tgt.shape, tgt.min().cpu().item(), tgt.max().cpu().item())
+        att_proxy = Variable(src.clone().detach(), requires_grad=True)
+        att_proxy.data = ((att_proxy.data * 2 - 1) * (1 - 1e-6)).atanh()
         optimizer = torch.optim.Adam([att_proxy], lr=0.01)
-        with trange(2000) as pbar:
+        with trange(1000) as pbar:
             for _ in pbar:
                 att = (att_proxy.tanh() + 1) * 0.5
                 out = model(att)
-                loss1 = diff(src, att)
-                loss2 = diff(tgt, out)
-                loss = loss1 + loss2
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                pbar.set_postfix({'SRC': f'{loss1.cpu().item():.3f}', 'OUT': f'{loss2.cpu().item():.3f}'})
-
-        # save torch results
-        att = np.array(att.detach().cpu() * 255).round().astype(np.uint8).transpose((1, 2, 0))
-        att_inp = scaling.scale_image(att)
-        Image.fromarray(att).save(f'{TAG}.attack.png')
-        Image.fromarray(att_inp).save(f'{TAG}.attack-inp.png')
-
-    """The following snippet implements adaptive scaling-attack with torch
-    """
-    if RUN_ADA:
-        n = 1 if defense == 'median' else 70
-        att_proxy = Variable(torch.zeros_like(src), requires_grad=True)
-        mask_t = torch.tensor(mask, dtype=torch.float32).to(att_proxy.device)
-        optimizer = torch.optim.Adam([att_proxy], lr=0.01)
-        with trange(100) as pbar:
-            for _ in pbar:
-                att = (att_proxy.tanh() + 1) * 0.5
-                att_def = att * (1 - mask_t) + filter(att.repeat(n, 1, 1, 1)) * mask_t
-                out = model(att_def)
-                loss1 = diff(src, att)
-                loss2 = diff_l1(tgt, out)
-                loss3 = torch.tensor(0)#0.1 * (get_color(src - att) + get_sim(src - att))
-                loss = loss1 + loss2 + loss3
+                loss1 = (src - att).norm(2)
+                loss2 = (tgt - out).norm(2)
+                loss = loss1 + 2 * loss2
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
                 pbar.set_postfix({
                     'SRC': f'{loss1.cpu().item():.3f}',
                     'OUT': f'{loss2.cpu().item():.3f}',
-                    'COLOR': f'{loss3.cpu().item():.3f}',
+                    # 'PRED': f'{model_cls(out[None, ...]).argmax(1).cpu().item()}'
+                })
+
+        # save torch results
+        att = np.array(att.detach().cpu() * 255).round().astype(np.uint8).transpose((1, 2, 0))
+        att_inp = scaling.scale_image(att)
+        Image.fromarray(att).save(f'{TAG}.attack.png')
+        Image.fromarray(att_inp).save(f'{TAG}.attack-inp.png')
+        print('y_att', predict(F.to_tensor(att_inp)[None, ...]))
+
+    """The following snippet implements adaptive scaling-attack with torch
+    """
+    if RUN_ADA:
+        n = 1 if defense == 'median' else 256
+        T = 2000 if defense == 'median' else 50
+        att_proxy = Variable(src.clone().detach(), requires_grad=True)
+        att_proxy.data = ((att_proxy.data * 2 - 1) * (1 - 1e-6)).atanh()
+        mask_t = torch.tensor(mask, dtype=torch.float32).to(att_proxy.device)
+        # optimizer = torch.optim.Adam([att_proxy], lr=0.05)  # median
+        optimizer = torch.optim.Adam([att_proxy], lr=0.5)  # random
+        with trange(T) as pbar:
+            for _ in pbar:
+                att = (att_proxy.tanh() + 1) * 0.5
+                att_def = filter(att.cpu().repeat(n, 1, 1, 1))
+                # limit changes
+                d = att_def - att.cpu()
+                d = d.sign() * torch.min(d.abs(), torch.tensor(0.03, dtype=torch.float32))
+                att_def = att.cpu() + d
+                att_def = att * (1 - mask_t) + att_def.cuda() * mask_t
+                # cuda
+                att_def = att_def.cuda()
+                out = model(att_def)
+                loss1 = (src - att).reshape(1, -1).norm(2, dim=1).mean()
+                loss2 = (out - tgt).reshape(n, -1).norm(2, dim=1).mean()
+                # loss2 = diff(tgt, out)#torch.square(tgt - out).sum((1,2,3)).mean(0)
+                # loss2 = (tgt.repeat(out.shape[0], 1, 1, 1) - out).norm(2, dim=(1, 2, 3)).mean()
+                loss = loss1 + 1 * loss2
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                with torch.no_grad():
+                    pred = model_cls(out).argmax(1).cpu().numpy()
+                pbar.set_postfix({
+                    'SRC': f'{loss1.cpu().item():.3f}',
+                    'OUT': f'{loss2.cpu().item():.3f}',
+                    'PRED-100': f'{(pred == 100).mean():.2%}',
+                    'PRED-200': f'{(pred == 200).mean():.2%}',
+                    # 'PRED': f'{model_cls(out[:1]).argmax(1).cpu().item()}'
                 })
 
         # save results
         F.to_pil_image(att.cpu()).save(f'{TAG}.adaptive.png')
-
-
+        F.to_pil_image(att_def[0].detach().cpu()).save(f'{TAG}.adaptive.{defense}.png')
+        print('y_ada', predict(out))
 
     """The following snippet implements median-defense with torch
     """
-    att_name = f'{TAG}.attack'
-    att = Image.open(f'{att_name}.png')
-    x = F.to_tensor(att)[None, ...]
-    filter = RandomPool2d(9, 1, 4)
+    for target in ['attack', 'adaptive']:
+        att_name = f'{TAG}.{target}'
+        att = Image.open(f'{att_name}.png')
+        x = F.to_tensor(att)[None, ...]
 
-    # global median filter
-    x_o = F.to_pil_image(filter(x)[0])
-    x_o.save(f'{att_name}.global-{defense}.png')
-    x_o_inp = scaling.scale_image(np.array(x_o))
-    Image.fromarray(x_o_inp).save(f'{att_name}.global-{defense}-inp.png')
+        # global median filter
+        x_o = F.to_pil_image(filter(x)[0].cpu())
+        x_o.save(f'{att_name}.global-{defense}.png')
+        x_o_inp = scaling.scale_image(np.array(x_o))
+        Image.fromarray(x_o_inp).save(f'{att_name}.global-{defense}-inp.png')
+        print('y_def_global', predict(F.to_tensor(x_o_inp)[None, ...]))
 
-    # selective median filter
-    x_o = x * (1 - mask) + filter(x) * mask
-    x_o = F.to_pil_image(x_o[0].float())
-    x_o.save(f'{att_name}.select-{defense}.png')
-    x_o_inp = scaling.scale_image(np.array(x_o))
-    Image.fromarray(x_o_inp).save(f'{att_name}.select-{defense}-inp.png')
+        # selective median filter
+        x_o = x * (1 - mask) + filter(x).cpu() * mask
+        x_o = F.to_pil_image(x_o[0].float())
+        x_o.save(f'{att_name}.select-{defense}.png')
+        x_o_inp = scaling.scale_image(np.array(x_o))
+        Image.fromarray(x_o_inp).save(f'{att_name}.select-{defense}-inp.png')
+        print('y_def_select', predict(F.to_tensor(x_o_inp)[None, ...]))
 
-    # selective median filter with mask-out
-    mask_l, mask_h = mask.copy(), mask.copy()
-    mask_l[0::2, 0::2] = mask_l[1::2, 1::2] = 0
-    mask_h[1::2, 0::2] = mask_h[0::2, 1::2] = 0
+        # selective median filter with mask-out
+        mask_l, mask_h = mask.copy(), mask.copy()
+        mask_l[0::2, 0::2] = mask_l[1::2, 1::2] = 0
+        mask_h[1::2, 0::2] = mask_h[0::2, 1::2] = 0
 
-    x_f = x.clone()
-    x_f[(slice(None),) * 2 + mask_l.nonzero()] = 0
-    x_f[(slice(None),) * 2 + mask_h.nonzero()] = 1
-    x_f = filter(x_f)
-    x_o = x * (1 - mask) + x_f * mask
-    x_o = F.to_pil_image(x_o[0].float())
-    x_o.save(f'{att_name}.select-{defense}-mask.png')
-    x_o_inp = scaling.scale_image(np.array(x_o))
-    Image.fromarray(x_o_inp).save(f'{att_name}.select-{defense}-mask-inp.png')
+        x_f = x.clone()
+        x_f[(slice(None),) * 2 + mask_l.nonzero()] = 0
+        x_f[(slice(None),) * 2 + mask_h.nonzero()] = 1
+        x_f = filter(x_f).cpu()
+        x_o = x * (1 - mask) + x_f * mask
+        x_o = F.to_pil_image(x_o[0].float())
+        x_o.save(f'{att_name}.select-{defense}-mask.png')
+        x_o_inp = scaling.scale_image(np.array(x_o))
+        Image.fromarray(x_o_inp).save(f'{att_name}.select-{defense}-mask-inp.png')
+        print('y_def_select_mask', predict(F.to_tensor(x_o_inp)[None, ...]))

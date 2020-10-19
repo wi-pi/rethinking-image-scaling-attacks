@@ -98,5 +98,5 @@ class RandomPool2d(MedianPool2d):
         idx_w = self._gen_idx(W, pl, in_shape, expand=False)
         # padding & take
         x = F.pad(x, padding, mode='reflect')
-        x = x.view(-1, *x.shape[2:])[idx_c, idx_h, idx_w].view(in_shape)
+        x = x.reshape(-1, *x.shape[2:])[idx_c, idx_h, idx_w].reshape(in_shape)
         return x
