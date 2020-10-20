@@ -37,12 +37,13 @@ class MedianPool2d(nn.Module):
          same: override padding and enforce same padding, boolean
     """
 
-    def __init__(self, kernel_size=3, stride=1, padding=0, same=False):
+    def __init__(self, kernel_size=3, stride=1, padding=0, same=False, mask=None):
         super(MedianPool2d, self).__init__()
         self.k = _pair(kernel_size)
         self.stride = _pair(stride)
         self.padding = _quadruple(padding)  # convert to l, r, t, b
         self.same = same
+        self.mask = None if mask is None else torch.tensor(mask).float()
 
     def _padding(self, x):
         if self.same:
@@ -67,9 +68,12 @@ class MedianPool2d(nn.Module):
     def forward(self, x):
         # using existing pytorch functions and tensor ops so that we get autograd,
         # would likely be more efficient to implement from scratch at C/Cuda level
+        x_raw = x
         x = F.pad(x, self._padding(x), mode='reflect')
         x = x.unfold(2, self.k[0], self.stride[0]).unfold(3, self.k[1], self.stride[1])
         x = x.contiguous().view(x.size()[:4] + (-1,)).median(dim=-1)[0]
+        if self.mask is not None:
+            x = x_raw * (1 - self.mask) + x * self.mask
         return x
 
 
@@ -90,6 +94,7 @@ class RandomPool2d(MedianPool2d):
         return idx
 
     def forward(self, x):
+        x_raw = x
         padding = pl, _, pt, _ = self._padding(x)
         in_shape = B, C, H, W = x.shape  # Note this is the shape of x BEFORE padding.
         # generate index
@@ -99,4 +104,6 @@ class RandomPool2d(MedianPool2d):
         # padding & take
         x = F.pad(x, padding, mode='reflect')
         x = x.reshape(-1, *x.shape[2:])[idx_c, idx_h, idx_w].reshape(in_shape)
+        if self.mask is not None:
+            x = x_raw * (1 - self.mask) + x * self.mask
         return x
