@@ -1,4 +1,8 @@
+from typing import Callable
+
 import torchvision.transforms as T
+from torchvision.datasets import ImageFolder
+
 from scaleadv.datasets.utils import ImageFolderWithIndex
 
 IMAGENET_PATH = 'static/datasets/imagenet/val/'
@@ -16,5 +20,6 @@ IMAGENET_TRANSFORM_NOCROP = T.Compose([
 ])
 
 
-def create_dataset(root=IMAGENET_PATH, transform=IMAGENET_TRANSFORM):
-    return ImageFolderWithIndex(root, transform=transform)
+def create_dataset(root: str = IMAGENET_PATH, transform: Callable = IMAGENET_TRANSFORM, index: bool = False):
+    cls = ImageFolderWithIndex if index is True else ImageFolder
+    return cls(root, transform=transform)
