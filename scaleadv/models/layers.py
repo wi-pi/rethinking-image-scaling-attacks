@@ -26,7 +26,7 @@ class NormalizationLayer(nn.Module):
         return f'NormalizationLayer(mean={self.mean}, std={self.std})'
 
 
-class _Pool2d(nn.Module):
+class Pool2d(nn.Module):
 
     def __init__(self, kernel_size: int, stride: int, padding: int, mask: Optional[np.ndarray] = None):
         """
@@ -36,14 +36,14 @@ class _Pool2d(nn.Module):
             padding: pool padding, int or 4-tuple (l, r, t, b) as in pytorch F.pad
             mask: indicate which pixels can be modified
         """
-        super(_Pool2d, self).__init__()
+        super(Pool2d, self).__init__()
         self.kernel_size = _pair(kernel_size)
         self.stride = _pair(stride)
         self.padding = _quadruple(padding)  # convert to l, r, t, b
         self.mask = None if mask is None else torch.as_tensor(mask, dtype=torch.float32)
 
 
-class MedianPool2d(_Pool2d):
+class MedianPool2d(Pool2d):
 
     def forward(self, x: torch.Tensor):
         x_raw = x
@@ -55,7 +55,7 @@ class MedianPool2d(_Pool2d):
         return x
 
 
-class RandomPool2d(_Pool2d):
+class RandomPool2d(Pool2d):
 
     def _gen_idx(self, n, gap, shape, expand=False):
         B, C, H, W = shape
