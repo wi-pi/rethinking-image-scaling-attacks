@@ -12,10 +12,8 @@ import torch.nn as nn
 from art.config import ART_NUMPY_DTYPE
 from tqdm import trange
 
-from scaleadv.datasets.imagenet import create_dataset
-from scaleadv.models.layers import Pool2d
+from scaleadv.models.layers import Pool2d, RandomPool2d
 from scaleadv.models.scaling import ScaleNet
-from scaleadv.tests.utils import resize_to_224x
 
 EARLY_STOP_ITER = 200
 EARLY_STOP_THRESHOLD = 0.999
@@ -30,6 +28,7 @@ class ScaleAttack(object):
             class_net: Optional[nn.Module] = None,
             max_iter: int = 1000,
             lr: float = 0.01,
+            lam_inp: float = 1.0,
             nb_samples: int = 1,
             early_stop: bool = True,
             tol=1e-6):
@@ -42,6 +41,7 @@ class ScaleAttack(object):
             class_net: classification network
             max_iter: maximum number of iterations.
             lr: learning rate
+            lam_inp: lambda for loss_inp
             nb_samples: number of samples if pooling is not deterministic
             early_stop: stop optimization if loss has converged
             tol: tolerance when converting to tanh space
@@ -54,6 +54,7 @@ class ScaleAttack(object):
         self.class_net = class_net
         self.max_iter = max_iter
         self.lr = lr
+        self.lam_inp = lam_inp
         self.nb_samples = nb_samples
         self.early_stop = early_stop
         self.tol = tol
@@ -86,13 +87,18 @@ class ScaleAttack(object):
             for i in pbar:
                 # Get attack image (big)
                 att = (var.tanh() + 1) * 0.5
+
                 # Get defensed image (big)
                 att_def = att
                 if use_pooling:
-                    att_def = att_def.cpu().repeat(self.nb_samples, 1, 1, 1)
+                    if isinstance(self.pooling, RandomPool2d):
+                        att_def = att_def.cpu()
+                    att_def = att_def.repeat(self.nb_samples, 1, 1, 1)
                     att_def = self.pooling(att_def).cuda()
+
                 # Get scaled image (small)
-                inp = self.scale_net(att)
+                inp = self.scale_net(att_def)
+
                 # Compute loss
                 loss = OrderedDict()
                 loss['BIG'] = (src - att).reshape(att.shape[0], -1).norm(2, dim=1).mean()
@@ -100,15 +106,18 @@ class ScaleAttack(object):
                 if use_ce:
                     pred = self.class_net(inp)
                     loss['CLS'] = nn.functional.cross_entropy(pred, y_tgt, reduction='mean')
-                total_loss = sum(loss.items(), start=torch.zeros(1))
+                total_loss = loss['BIG'] + self.lam_inp * loss['INP'] + loss.get('CLS', 0)
+
                 # Optimize
                 optimizer.zero_grad()
                 total_loss.backward()
                 optimizer.step()
+
                 # Logging
                 loss['TOTAL'] = total_loss
                 stats = OrderedDict({k: f'{v.cpu().item():.3f}' for k, v in loss.items()})
                 pbar.set_postfix(stats)
+
                 # Early stop
                 if self.early_stop and i % EARLY_STOP_ITER == 0:
                     if total_loss > prev_loss * EARLY_STOP_THRESHOLD:
@@ -119,36 +128,3 @@ class ScaleAttack(object):
         att = np.array(att.detach().cpu(), dtype=ART_NUMPY_DTYPE)
         inp = np.array(inp.detach().cpu(), dtype=ART_NUMPY_DTYPE)
         return att, inp
-
-
-if __name__ == '__main__':
-    import torchvision.transforms as T
-    from scaling.ScalingGenerator import ScalingGenerator
-    from scaling.SuppScalingAlgorithms import SuppScalingAlgorithms
-    from scaling.SuppScalingLibraries import SuppScalingLibraries
-
-    # load data
-    dataset = create_dataset(transform=None)
-    src, _ = dataset[5000]
-    tgt, _ = dataset[1000]
-    src = resize_to_224x(src)
-    src, tgt = map(np.array, [src, tgt])
-
-    # load scaling
-    lib = SuppScalingLibraries.CV
-    algo = SuppScalingAlgorithms.LINEAR
-    scaling = ScalingGenerator.create_scaling_approach(src.shape, (224, 224, 4), lib, algo)
-    tgt = scaling.scale_image(tgt)
-
-    # load attack
-    src = np.array(src / 255, dtype=np.float32).transpose((2, 0, 1))[None, ...]
-    tgt = np.array(tgt / 255, dtype=np.float32).transpose((2, 0, 1))[None, ...]
-    scaling_net = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval().cuda()
-    attack = ScaleAttack(scaling_net)
-    att, inp = attack.generate(src, tgt)
-
-    # save figs
-    f = T.Compose([lambda x: x[0], torch.tensor, T.ToPILImage()])
-    for n in ['src', 'tgt', 'att', 'inp']:
-        var = locals()[n]
-        f(var).save(f'TEST.ScaleAttack.{n}.png')
