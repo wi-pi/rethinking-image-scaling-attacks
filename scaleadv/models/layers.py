@@ -1,5 +1,10 @@
+from typing import Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn.modules.utils import _pair, _quadruple
 
 
 class NormalizationLayer(nn.Module):
@@ -21,74 +26,42 @@ class NormalizationLayer(nn.Module):
         return f'NormalizationLayer(mean={self.mean}, std={self.std})'
 
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn.modules.utils import _pair, _quadruple
+class _Pool2d(nn.Module):
 
-
-class MedianPool2d(nn.Module):
-    """ Median pool (usable as median filter when stride=1) module.
-
-    Args:
-         kernel_size: size of pooling kernel, int or 2-tuple
-         stride: pool stride, int or 2-tuple
-         padding: pool padding, int or 4-tuple (l, r, t, b) as in pytorch F.pad
-         same: override padding and enforce same padding, boolean
-    """
-
-    def __init__(self, kernel_size=3, stride=1, padding=0, same=False, mask=None):
-        super(MedianPool2d, self).__init__()
-        self.k = _pair(kernel_size)
+    def __init__(self, kernel_size: int, stride: int, padding: int, mask: Optional[np.ndarray] = None):
+        """
+        Args:
+            kernel_size: size of pooling kernel, int or 2-tuple
+            stride: pool stride, int or 2-tuple
+            padding: pool padding, int or 4-tuple (l, r, t, b) as in pytorch F.pad
+            mask: indicate which pixels can be modified
+        """
+        super(_Pool2d, self).__init__()
+        self.kernel_size = _pair(kernel_size)
         self.stride = _pair(stride)
         self.padding = _quadruple(padding)  # convert to l, r, t, b
-        self.same = same
-        self.mask = None if mask is None else torch.tensor(mask).float()
+        self.mask = None if mask is None else torch.as_tensor(mask, dtype=torch.float32)
 
-    def _padding(self, x):
-        if self.same:
-            ih, iw = x.size()[2:]
-            if ih % self.stride[0] == 0:
-                ph = max(self.k[0] - self.stride[0], 0)
-            else:
-                ph = max(self.k[0] - (ih % self.stride[0]), 0)
-            if iw % self.stride[1] == 0:
-                pw = max(self.k[1] - self.stride[1], 0)
-            else:
-                pw = max(self.k[1] - (iw % self.stride[1]), 0)
-            pl = pw // 2
-            pr = pw - pl
-            pt = ph // 2
-            pb = ph - pt
-            padding = (pl, pr, pt, pb)
-        else:
-            padding = self.padding
-        return padding
 
-    def forward(self, x):
-        # using existing pytorch functions and tensor ops so that we get autograd,
-        # would likely be more efficient to implement from scratch at C/Cuda level
+class MedianPool2d(_Pool2d):
+
+    def forward(self, x: torch.Tensor):
         x_raw = x
-        x = F.pad(x, self._padding(x), mode='reflect')
+        x = F.pad(x, self.padding, mode='reflect')
         x = x.unfold(2, self.k[0], self.stride[0]).unfold(3, self.k[1], self.stride[1])
         x = x.contiguous().view(x.size()[:4] + (-1,)).median(dim=-1)[0]
         if self.mask is not None:
-            mask = self.mask.to(x.device)
-            x = x_raw * (1 - mask) + x * mask
+            x = x_raw * (1 - self.mask) + x * self.mask
         return x
 
 
-class RandomPool2d(MedianPool2d):
-
-    def __init__(self, *args, **kwargs):
-        super(RandomPool2d, self).__init__(*args, **kwargs)
+class RandomPool2d(_Pool2d):
 
     def _gen_idx(self, n, gap, shape, expand=False):
         B, C, H, W = shape
         # get index of valid pixels (kernel center)
         idx = torch.arange(n)
-        if expand:
-            idx = idx[:, None]
+        idx = idx[:, None] if expand else idx
         idx = idx + gap + torch.randint(-gap, gap + 1, (B, H, W))
         # duplicate along channel
         idx = idx[:, None, ...].repeat(1, C, 1, 1).flatten()
