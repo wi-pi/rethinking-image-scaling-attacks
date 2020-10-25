@@ -1,5 +1,5 @@
 """
-This module implements several attacks' invariants.
+This module implements several attacks' variants.
 1. Attack x, compute perturbation on x.
 2. Attack x, compute perturbation on fixed proxy(x).
 

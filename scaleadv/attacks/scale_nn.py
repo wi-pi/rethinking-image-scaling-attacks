@@ -1,5 +1,5 @@
 """
-This module implements Scaling attack with invariants.
+This module implements Scaling attack with variants.
 1. Common attack, with cross-entropy support.
 2. Adaptive attack, against both deterministic and non-deterministic defenses.
 """
