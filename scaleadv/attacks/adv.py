@@ -7,13 +7,19 @@ Note:
     1. For PGD, option 2 is implemented by hacking the estimator's `loss_gradient_framework` function.
        - This might be inaccurate due to projection on proxy(x) instead of x.
        - This might be affected by future updates of PGD's official implementation.
+
+References:
+    - ShadowAttack
+      https://github.com/Trusted-AI/adversarial-robustness-toolbox/blob/main/art/attacks/evasion/shadow_attack.py
 """
-from typing import Optional, Callable
+from typing import Optional
 
 import numpy as np
 from art.attacks.evasion import ProjectedGradientDescentPyTorch, ShadowAttack
 from art.config import ART_NUMPY_DTYPE
 from tqdm import trange
+
+from scaleadv.attacks.proxy import Proxy
 
 
 def loss_gradient_framework_average(super_call):
@@ -26,7 +32,7 @@ def loss_gradient_framework_average(super_call):
 
 class IndirectPGD(ProjectedGradientDescentPyTorch):
 
-    def generate(self, x: np.ndarray, y: Optional[np.ndarray] = None, proxy: Optional[Callable] = None) -> np.ndarray:
+    def generate(self, x: np.ndarray, y: Optional[np.ndarray] = None, proxy: Optional[Proxy] = None) -> np.ndarray:
         """
         Generate adversarial example by attacking a proxy.
         Args:
@@ -63,7 +69,7 @@ class IndirectPGD(ProjectedGradientDescentPyTorch):
 
 class IndirectShadowAttack(ShadowAttack):
 
-    def generate(self, x: np.ndarray, y: Optional[np.ndarray] = None, proxy: Optional[Callable] = None) -> np.ndarray:
+    def generate(self, x: np.ndarray, y: Optional[np.ndarray] = None, proxy: Optional[Proxy] = None) -> np.ndarray:
         """
         Generate adversarial example by attacking a proxy (not necessarily Normal Noise)
         Args:
