@@ -48,7 +48,7 @@ class MedianPool2d(Pool2d):
     def forward(self, x: torch.Tensor):
         x_raw = x
         x = F.pad(x, self.padding, mode='reflect')
-        x = x.unfold(2, self.k[0], self.stride[0]).unfold(3, self.k[1], self.stride[1])
+        x = x.unfold(2, self.kernel_size[0], self.stride[0]).unfold(3, self.kernel_size[1], self.stride[1])
         x = x.contiguous().view(x.size()[:4] + (-1,)).median(dim=-1)[0]
         if self.mask is not None:
             x = x_raw * (1 - self.mask) + x * self.mask
@@ -69,7 +69,7 @@ class RandomPool2d(Pool2d):
 
     def forward(self, x):
         x_raw = x
-        padding = pl, _, pt, _ = self._padding(x)
+        padding = pl, _, pt, _ = self.padding
         in_shape = B, C, H, W = x.shape  # Note this is the shape of x BEFORE padding.
         # generate index
         idx_c = torch.arange(B * C)[:, None].repeat(1, H * W).flatten()
