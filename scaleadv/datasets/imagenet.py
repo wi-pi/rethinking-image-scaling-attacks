@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Optional
 
 import torchvision.transforms as T
 from torchvision.datasets import ImageFolder
@@ -20,6 +20,6 @@ IMAGENET_TRANSFORM_NOCROP = T.Compose([
 ])
 
 
-def create_dataset(root: str = IMAGENET_PATH, transform: Callable = IMAGENET_TRANSFORM, index: bool = False):
+def create_dataset(root: str = IMAGENET_PATH, transform: Optional[Callable] = IMAGENET_TRANSFORM, index: bool = False):
     cls = ImageFolderWithIndex if index is True else ImageFolder
     return cls(root, transform=transform)
