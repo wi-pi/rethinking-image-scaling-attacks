@@ -24,6 +24,7 @@ if __name__ == '__main__':
     norm, sigma, step = 2, 20, 30
     epsilon = sigma * 2.5 / step
     target = 200
+    attack_pooling = False
 
     # load data
     dataset = create_dataset(transform=None)
@@ -34,7 +35,7 @@ if __name__ == '__main__':
     # load scaling
     lib = SuppScalingLibraries.CV
     algo = SuppScalingAlgorithms.LINEAR
-    scaling = ScalingGenerator.create_scaling_approach(src.shape, (224, 224, 4), lib, algo)
+    scaling = ScalingGenerator.create_scaling_approach(src.shape, (224, 224, 3), lib, algo)
     mask = get_mask_from_cl_cr(scaling.cl_matrix, scaling.cr_matrix)
 
     # load scaled src image & to tensor
@@ -48,7 +49,13 @@ if __name__ == '__main__':
     class_net = nn.Sequential(NormalizationLayer.from_preset('imagenet'), resnet50_imagenet('2')).eval().cuda()
     classifier = PyTorchClassifier(class_net, nn.CrossEntropyLoss(), (3, 224, 224), 1000, clip_values=(0, 1))
     adv_attack = IndirectPGD(classifier, norm, sigma, epsilon, step, targeted=True)
-    scl_attack = ScaleAttack(scale_net, pooling, class_net, lr=0.3)
+    scl_attack = ScaleAttack(scale_net, pooling, class_net, lr=0.3, lam_inp=0.5, early_stop=True)
+
+    # attack src_def instead
+    if attack_pooling:
+        x = pooling(torch.tensor(src).cuda())
+        src_inp = scale_net(x).cpu().numpy()
+        # src = x.cpu().numpy()
 
     # adv attack
     y_target = np.eye(1000, dtype=np.int)[None, target]
@@ -62,18 +69,15 @@ if __name__ == '__main__':
     vs = src, adv, att
     bs = True, False, True
     for n, v, b in zip(ns, vs, bs):
-        # small and continue
-        if not b:
-            print(n, classifier.predict(v).argmax(1)[0])
-            continue
         # to tensor
         v = torch.tensor(v).cuda()
-        # big and no pooling
-        x = scale_net(v).cpu()
-        print(n, classifier.predict(x).argmax(1)[0])
+        # no pooling
+        x = scale_net(v).cpu() if b else v.cpu()
+        print(n + ' ', classifier.predict(x).argmax(1)[0])
         # big and pooling
-        x = scale_net(pooling(v)).cpu()
-        print(n + '*', classifier.predict(x).argmax(1)[0])
+        if b:
+            x = scale_net(pooling(v)).cpu()
+            print(n + '*', classifier.predict(x).argmax(1)[0])
 
     # save figs
     f = T.Compose([lambda x: x[0], torch.tensor, T.ToPILImage()])
