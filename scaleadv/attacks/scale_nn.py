@@ -116,6 +116,9 @@ class ScaleAttack(object):
                 # Logging
                 loss['TOTAL'] = total_loss
                 stats = OrderedDict({k: f'{v.cpu().item():.3f}' for k, v in loss.items()})
+                if use_ce:
+                    with torch.no_grad():
+                        stats['PRED'] = pred.argmax(1)[0].cpu().item()
                 pbar.set_postfix(stats)
 
                 # Early stop
