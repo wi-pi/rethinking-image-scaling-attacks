@@ -63,7 +63,7 @@ class MedianPool2d(Pool2d):
         x = x.contiguous().view(x.size()[:4] + (-1,)).median(dim=-1)[0]
         if self.mask is not None:
             self.mask = self.mask.to(x.device)
-            x = x_raw.contiguous() * (1 - self.mask) + x * self.mask
+            x = x_raw * (1 - self.mask) + x * self.mask
         return x
 
 
@@ -92,5 +92,5 @@ class RandomPool2d(Pool2d):
         x = x.reshape(-1, *x.shape[2:])[idx_c, idx_h, idx_w].reshape(in_shape)
         if self.mask is not None:
             self.mask.to(x.device)
-            x = x_raw.contiguous() * (1 - self.mask) + x * self.mask
+            x = x_raw * (1 - self.mask) + x * self.mask
         return x
