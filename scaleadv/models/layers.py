@@ -51,6 +51,7 @@ class MedianPool2d(Pool2d):
         x = x.unfold(2, self.kernel_size[0], self.stride[0]).unfold(3, self.kernel_size[1], self.stride[1])
         x = x.contiguous().view(x.size()[:4] + (-1,)).median(dim=-1)[0]
         if self.mask is not None:
+            self.mask = self.mask.to(x.device)
             x = x_raw * (1 - self.mask) + x * self.mask
         return x
 
@@ -79,5 +80,6 @@ class RandomPool2d(Pool2d):
         x = F.pad(x, padding, mode='reflect')
         x = x.reshape(-1, *x.shape[2:])[idx_c, idx_h, idx_w].reshape(in_shape)
         if self.mask is not None:
+            self.mask.to(x.device)
             x = x_raw * (1 - self.mask) + x * self.mask
         return x
