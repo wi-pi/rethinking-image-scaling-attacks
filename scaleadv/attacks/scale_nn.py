@@ -118,7 +118,13 @@ class ScaleAttack(object):
                 stats = OrderedDict({k: f'{v.cpu().item():.3f}' for k, v in loss.items()})
                 if use_ce:
                     with torch.no_grad():
-                        stats['PRED'] = pred.argmax(1)[0].cpu().item()
+                        if pred.shape[0] == 1:
+                            stats['PRED'] = pred.argmax(1)[0].cpu().item()
+                        else:
+                            acc = (pred.argmax(1) == 100).float().mean().cpu().item()
+                            stats['PRED-100'] = f'{acc:.2%}'
+                            acc = (pred.argmax(1) == 200).float().mean().cpu().item()
+                            stats['PRED-200'] = f'{acc:.2%}'
                 pbar.set_postfix(stats)
 
                 # Early stop
