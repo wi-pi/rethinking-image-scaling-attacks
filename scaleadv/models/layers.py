@@ -6,8 +6,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.modules.utils import _pair, _quadruple
 
+from scaleadv.datasets.imagenet import IMAGENET_STD, IMAGENET_MEAN
+
 
 class NormalizationLayer(nn.Module):
+    PRESET = {
+        'imagenet': (IMAGENET_MEAN, IMAGENET_STD)
+    }
+
+    @classmethod
+    def from_preset(cls, name: str):
+        if name not in cls.PRESET:
+            raise ValueError(f'Unrecognized preset name "{name}".')
+        return cls(*cls.PRESET[name])
 
     def __init__(self, mean, std):
         super(NormalizationLayer, self).__init__()
