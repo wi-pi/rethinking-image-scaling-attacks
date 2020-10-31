@@ -4,15 +4,17 @@ This module implements Scaling attack with variants.
 2. Adaptive attack, against both deterministic and non-deterministic defenses.
 """
 from collections import OrderedDict
+from itertools import count
 from typing import Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
+import torchvision.transforms.functional as F
 from PIL import Image
 from art.config import ART_NUMPY_DTYPE
 from tqdm import trange
-import torchvision.transforms.functional as F
+
 from scaleadv.models.layers import Pool2d, RandomPool2d
 from scaleadv.models.scaling import ScaleNet
 
@@ -146,6 +148,97 @@ class ScaleAttack(object):
         inp = np.array(inp.detach().cpu(), dtype=ART_NUMPY_DTYPE)
         return att, inp
 
+    def generate_L0(self, src: np.ndarray, tgt: np.ndarray):
+        """Test only, did not pass the test yet.
+        """
+        # Check params
+        for x in [src, tgt]:
+            assert x.ndim == 4 and x.shape[0] == 1 and x.shape[1] == 3
+            assert x.dtype == np.float32
+
+        # Convert to tensors
+        src = torch.as_tensor(src, dtype=torch.float32).cuda()
+        tgt = torch.as_tensor(tgt, dtype=torch.float32).cuda()
+
+        # Prepare attack params
+        var = torch.autograd.Variable(torch.zeros_like(src), requires_grad=True)
+        var.data = torch.atanh((src.data * 2 - 1) * (1 - self.tol))
+        mask = torch.ones_like(src[0, 0], requires_grad=False)  # mask is consistent per channel
+        optimizer = torch.optim.Adam([var], lr=self.lr)
+        opt = None
+
+        # Outer attack
+        prev_loss_out = np.inf
+        for i in range(100):
+            # Inner attack
+            print(f'Attack Epoch {i}, L0 = {mask.norm(0).cpu().item()}')
+            with trange(self.max_iter, desc=f'ScaleAttack-{i}') as pbar:
+                prev_loss = np.inf
+                for j in pbar:
+                    # forward & loss
+                    att = src * (1 - mask) + (var.tanh() + 1) * 0.5 * mask
+                    inp = self.scale_net(att)
+                    loss = OrderedDict({
+                        'BIG': (src - att).reshape(att.shape[0], -1).norm(2, dim=1).mean(),
+                        'INP': (tgt - inp).reshape(inp.shape[0], -1).norm(2, dim=1).mean(),
+                    })
+                    total_loss = loss['BIG'] + self.lam_inp * loss['INP']
+
+                    # optimize
+                    optimizer.zero_grad()
+                    total_loss.backward()
+                    optimizer.step()
+
+                    # loggging
+                    loss['TOTAL'] = total_loss
+                    stats = OrderedDict({k: f'{v.cpu().item():.3f}' for k, v in loss.items()})
+                    pbar.set_postfix(stats)
+
+                    # early stop
+                    if self.early_stop and j % EARLY_STOP_ITER == 0:
+                        if total_loss > prev_loss * EARLY_STOP_THRESHOLD:
+                            break
+                        prev_loss = total_loss
+
+            # early stop for outer attack
+            if total_loss > prev_loss_out * 1.2:
+                opt = att, inp
+                break
+            prev_loss_out = total_loss
+
+            # apply L0 constraint
+            for j in count():
+                print(f'L0 ({j}) = {mask.norm(0).cpu().item()}')
+                # forward with current mask
+                att = src * (1 - mask) + (var.tanh() + 1) * 0.5 * mask
+                inp = self.scale_net(att)
+                loss_big = (src - att).reshape(att.shape[0], -1).norm(2, dim=1).mean()
+                loss_inp = (tgt - inp).reshape(inp.shape[0], -1).norm(2, dim=1).mean()
+                total_loss = loss_big + self.lam_inp * loss_inp
+                if total_loss > prev_loss_out * 1.05:
+                    break
+                optimizer.zero_grad()
+                total_loss.backward()
+                # measure how much changed
+                with torch.no_grad():
+                    delta = torch.abs(var.grad * loss_big * mask).sum(dim=(0, 1))
+                    nonzero_delta = delta[delta > 0].cpu()
+                    if nonzero_delta.numel() == 0:
+                        opt = att, inp
+                        break
+                    # update mask
+                    tau = np.percentile(nonzero_delta, 10)
+                    mask = torch.ones_like(mask)
+                    mask[delta <= tau] = 0
+
+            if opt is not None:
+                break
+
+        att, inp = opt
+        att = np.array(att.detach().cpu(), dtype=ART_NUMPY_DTYPE)
+        inp = np.array(inp.detach().cpu(), dtype=ART_NUMPY_DTYPE)
+        return att, inp
+
     def generate_with_given_pooling(self,
                                     src: torch.Tensor,
                                     tgt: torch.Tensor,
@@ -184,8 +277,8 @@ class ScaleAttack(object):
                 loss['BIG'] = (src - att).reshape(att.shape[0], -1).norm(2, dim=1).mean()
                 loss['INP'] = (tgt - inp).reshape(inp.shape[0], -1).norm(2, dim=1).mean()
                 # loss['CLS'] = nn.functional.cross_entropy(pred, y_tgt, reduction='mean')
-                #total_loss = loss['BIG'] + self.lam_inp * loss['INP'] + loss['CLS']
-                total_loss = loss['BIG'] + self.lam_inp * loss['INP']# + loss['CLS']
+                # total_loss = loss['BIG'] + self.lam_inp * loss['INP'] + loss['CLS']
+                total_loss = loss['BIG'] + self.lam_inp * loss['INP']  # + loss['CLS']
 
                 # Optimize
                 optimizer.zero_grad()
@@ -230,9 +323,9 @@ class ScaleAttack(object):
             pred = self.test(att, n=self.nb_samples)
             print(f'Test 100: {np.mean(pred == 100):.2%}')
             print(f'Test 200: {np.mean(pred == 200):.2%}')
-            Image.fromarray(np.round(att.cpu().detach().numpy()[0] * 255).astype(np.uint8).transpose((1,2,0))).save(f'test-{i}.png')
+            Image.fromarray(np.round(att.cpu().detach().numpy()[0] * 255).astype(np.uint8).transpose((1, 2, 0))).save(
+                f'test-{i}.png')
         return att, inp
-
 
     def test(self, x: np.ndarray, n: int):
         x = torch.as_tensor(x, dtype=torch.float32)
@@ -242,12 +335,11 @@ class ScaleAttack(object):
             pred = self.class_net(xs).argmax(1)
         return pred.cpu().numpy()
 
-
     def generate_with_given_pooling_shadow(self,
-                                    src: np.ndarray,
-                                    tgt: np.ndarray,
-                                    y_tgt: int,
-                                    fix_pooling: np.ndarray, ):
+                                           src: np.ndarray,
+                                           tgt: np.ndarray,
+                                           y_tgt: int,
+                                           fix_pooling: np.ndarray, ):
         # Convert to tensor
         src = torch.as_tensor(src, dtype=torch.float32).cuda()
         tgt = torch.as_tensor(tgt, dtype=torch.float32).cuda()
