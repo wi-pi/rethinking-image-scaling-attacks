@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 from art.config import ART_NUMPY_DTYPE
 
+from scaleadv.models.scaling import ScaleNet
+
 
 class Proxy(object):
 
@@ -26,12 +28,17 @@ class Proxy(object):
 
 class PoolingProxy(Proxy):
 
-    def __init__(self, pooling: nn.Module, n: int):
+    def __init__(self, pooling: nn.Module, n: int, x_big: np.ndarray, scale: ScaleNet):
         super(PoolingProxy, self).__init__(pooling, n)
+        self.x_big = x_big
+        self.scale = scale
 
     def _augment(self, x: np.ndarray) -> np.ndarray:
-        batch = torch.as_tensor(x).repeat(self.n, 1, 1, 1)
-        return self.proxy(batch)
+        with torch.no_grad():
+            batch = torch.as_tensor(self.x_big).repeat(self.n, 1, 1, 1).cpu()
+            batch = self.proxy(batch).cuda()
+            batch = self.scale(batch).cpu()
+        return batch.detach().clone()
 
 
 class NoiseProxy(Proxy):

@@ -64,6 +64,11 @@ class IndirectPGD(ProjectedGradientDescentPyTorch):
         # Recover gradient
         self.estimator.loss_gradient_framework = grad_fn
 
+        # Inner test
+        pred = self.estimator.predict(x_proxy_adv).argmax(1)
+        print(f'adv-100: {np.mean(pred == 100):.2%}')
+        print(f'adv-200: {np.mean(pred == 200):.2%}')
+
         return x_adv
 
 
