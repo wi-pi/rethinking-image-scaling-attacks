@@ -94,3 +94,17 @@ class RandomPool2d(Pool2d):
             self.mask.to(x.device)
             x = x_raw * (1 - self.mask) + x * self.mask
         return x
+
+    def forward_potential(self, x):
+        x_raw = x
+        x = x.permute(1, 0, 2, 3)
+        x = F.pad(x, self.padding, mode='reflect')
+        x = x.unfold(2, self.kernel_size[0], self.stride[0]).unfold(3, self.kernel_size[1], self.stride[1])
+        x = x.contiguous().view(x.size()[:4] + (-1,))
+        idx = torch.eye(x.shape[-1])[torch.randint(x.shape[-1], x.shape[1:-1])]
+        x = (x * idx).sum(-1).permute(1, 0, 2, 3)
+
+        if self.mask is not None:
+            self.mask.to(x.device)
+            x = x_raw * (1 - self.mask) + x * self.mask
+        return x
