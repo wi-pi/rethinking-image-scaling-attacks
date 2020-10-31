@@ -176,7 +176,8 @@ class ScaleAttack(object):
                 inp = self.scale_net(att_def)
 
                 # Get prediction
-                pred = self.class_net(inp)
+                with torch.no_grad():
+                    pred = self.class_net(inp)
 
                 # Compute loss
                 loss = OrderedDict()
@@ -218,7 +219,8 @@ class ScaleAttack(object):
         tgt = torch.as_tensor(tgt, dtype=torch.float32).cuda()
         for i in range(10):
             # att = torch.as_tensor(att, dtype=torch.float32).cpu()
-            att_batch = self.pooling(att.cpu().repeat(self.nb_samples, 1, 1, 1)).cuda()
+            with torch.no_grad():
+                att_batch = self.pooling(att.cpu().repeat(self.nb_samples, 1, 1, 1)).cuda()
             # test
             import torchvision.transforms.functional as F
             for j, po in enumerate(att_batch[:10]):
