@@ -76,6 +76,7 @@ class ScaleAttack(object):
         # Convert to tensor
         src = torch.as_tensor(src, dtype=torch.float32).cuda()
         tgt = torch.as_tensor(tgt, dtype=torch.float32).cuda()
+        factor = torch.sqrt(1.0 * src.numel() / tgt.numel())
 
         # Prepare attack
         var = torch.autograd.Variable(src.clone().detach(), requires_grad=True)
@@ -105,7 +106,7 @@ class ScaleAttack(object):
                 # Compute loss
                 loss = OrderedDict()
                 loss['BIG'] = (src - att).reshape(att.shape[0], -1).norm(2, dim=1).mean()
-                loss['INP'] = (tgt - inp).reshape(inp.shape[0], -1).norm(2, dim=1).mean()
+                loss['INP'] = (tgt - inp).reshape(inp.shape[0], -1).norm(2, dim=1).mean() * factor
                 if use_ce:
                     pred = self.class_net(inp)
                     loss['CLS'] = nn.functional.cross_entropy(pred, y_tgt, reduction='mean')
