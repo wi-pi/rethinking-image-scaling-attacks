@@ -57,7 +57,8 @@ if __name__ == '__main__':
     adv_attack = IndirectPGD(classifier, norm, sigma, epsilon, step, targeted=True, batch_size=300)
     # adv_attack = CarliniL2Method(classifier, confidence=3.0, targeted=True, binary_search_steps=20, max_iter=20)
     # adv_attack = ShadowAttack(classifier, sigma=0.1, targeted=True, batch_size=300)
-    scl_attack = ScaleAttack(scale_net, pooling, class_net, lr=0.05, lam_inp=40, nb_samples=100, max_iter=200, early_stop=True)
+    # scl_attack = ScaleAttack(scale_net, pooling, class_net, lr=0.05, lam_inp=200, nb_samples=300, max_iter=200, early_stop=True)   # for None proxy
+    scl_attack = ScaleAttack(scale_net, pooling, class_net, lr=0.05, lam_inp=40, nb_samples=200, max_iter=200, early_stop=True)
 
     # attack src_def instead
     if attack_pooling:
