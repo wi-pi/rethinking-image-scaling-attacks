@@ -3,6 +3,7 @@ This module implements Scaling attack with variants.
 1. Common attack, with cross-entropy support.
 2. Adaptive attack, against both deterministic and non-deterministic defenses.
 """
+import math
 from collections import OrderedDict
 from itertools import count
 from typing import Optional
@@ -76,7 +77,7 @@ class ScaleAttack(object):
         # Convert to tensor
         src = torch.as_tensor(src, dtype=torch.float32).cuda()
         tgt = torch.as_tensor(tgt, dtype=torch.float32).cuda()
-        factor = torch.sqrt(1.0 * src.numel() / tgt.numel())
+        factor = math.sqrt(1.0 * src.numel() / tgt.numel())
 
         # Prepare attack
         var = torch.autograd.Variable(src.clone().detach(), requires_grad=True)
@@ -101,6 +102,12 @@ class ScaleAttack(object):
                     att_def = self.pooling(att_def).cuda()
 
                 # Get scaled image (small)
+                """Note
+                1. Add avg_pool2d beats all defenses (worst case attack)
+                2. Common median-adaptive attack get better results. (so median is less robust than random)
+                """
+                # att_def = nn.functional.pad(att_def, [1, 1, 1, 1], mode='reflect')
+                # att_def = nn.functional.avg_pool2d(att_def, 3, 1)
                 inp = self.scale_net(att_def)
 
                 # Compute loss
@@ -138,7 +145,7 @@ class ScaleAttack(object):
                     prev_loss = total_loss
 
                 # Test
-                if i % 10 == 0:
+                if False and i % 10 == 0:
                     pred = self.test(att, n=self.nb_samples)
                     print(f'Test 100: {np.mean(pred == 100):.2%}')
                     print(f'Test 200: {np.mean(pred == 200):.2%}')
