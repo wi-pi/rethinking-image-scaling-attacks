@@ -12,13 +12,15 @@ from scaling.ScalingGenerator import ScalingGenerator
 from scaling.SuppScalingAlgorithms import SuppScalingAlgorithms
 from scaling.SuppScalingLibraries import SuppScalingLibraries
 from torch.autograd import Variable
-from torchvision.models import resnet50
+from torch.nn import DataParallel
 from tqdm import trange
 
+from scaleadv.attacks.adv import IndirectPGD
 from scaleadv.bypass.random import resize_to_224x
 from scaleadv.datasets.imagenet import create_dataset, IMAGENET_MEAN, IMAGENET_STD
 from scaleadv.models.layers import MedianPool2d, RandomPool2d
 from scaleadv.models.layers import NormalizationLayer
+from scaleadv.models.scaling import ScaleNet
 from scaleadv.tests.gen_adv_pgd import get_model
 
 MODEL_PATH = {
@@ -26,15 +28,6 @@ MODEL_PATH = {
     2: 'static/models/imagenet_l2_3_0.pt',
 }
 
-class ScalingNet(nn.Module):
-
-    def __init__(self, cl: np.ndarray, cr: np.ndarray):
-        super(ScalingNet, self).__init__()
-        self.cl = nn.Parameter(torch.as_tensor(cl.copy(), dtype=torch.float32), requires_grad=False)
-        self.cr = nn.Parameter(torch.as_tensor(cr.copy(), dtype=torch.float32), requires_grad=False)
-
-    def forward(self, inp: torch.Tensor):
-        return self.cl @ inp @ self.cr
 
 
 def predict(inp):
@@ -53,8 +46,8 @@ if __name__ == '__main__':
     RUN_CVX = False
     RUN_SGD = True
     RUN_ADA = True
-    RUN_MEDIAN_DEF = True
-    RUN_RANDOM_DEF = False
+    RUN_MEDIAN_DEF = False
+    RUN_RANDOM_DEF = True
 
     if RUN_MEDIAN_DEF:
         defense = 'median'
@@ -68,8 +61,8 @@ if __name__ == '__main__':
 
     # load data
     dataset = create_dataset(transform=None)
-    _, src, _ = dataset[5000]
-    _, tgt, _ = dataset[1000]
+    src, _ = dataset[5000]
+    tgt, _ = dataset[1000]
     src = resize_to_224x(src, more=1)
     x_src = np.array(src)
     x_tgt = np.array(tgt)
@@ -94,7 +87,8 @@ if __name__ == '__main__':
         NormalizationLayer(IMAGENET_MEAN, IMAGENET_STD),
         get_model(weights_file=MODEL_PATH[2]),
         # resnet50(pretrained=True)
-    ).eval().cuda()
+    ).eval()
+    model_cls = DataParallel(model_cls).cuda()
     classifier = PyTorchClassifier(model_cls, nn.CrossEntropyLoss(), (3, 224, 224), 1000, clip_values=(0., 1.))
 
     """The following snippet implement scaling-attack with cvxpy
@@ -114,9 +108,9 @@ if __name__ == '__main__':
     """
     # EXPERIMENT: Attack filtered src
     x = x_src
-    x_src = F.to_pil_image(filter(F.to_tensor(x)[None, ...])[0])
-    x_src.save(f'{TAG}.src-def.png')
-    x_src = np.array(x_src)
+    # x_src = F.to_pil_image(filter(F.to_tensor(x)[None, ...])[0])
+    # x_src.save(f'{TAG}.src-def.png')
+    # x_src = np.array(x_src)
     if RUN_ADV:
         # NORM, SIGMA, STEP = np.inf, 16 / 255, 30
         NORM, SIGMA, STEP = 2, 20, 30
@@ -132,7 +126,7 @@ if __name__ == '__main__':
     """The following snippet implements scaling-attack with torch
     """
     # load network
-    model = ScalingNet(scaling.cl_matrix, scaling.cr_matrix).eval().cuda()
+    model = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval().cuda()
     diff = nn.MSELoss(reduction='mean')
     diff_l1 = nn.L1Loss(reduction='mean')
     src, tgt = map(lambda x: F.to_tensor(x).cuda(), [x_src, x_tgt])
@@ -184,7 +178,7 @@ if __name__ == '__main__':
             for _ in pbar:
                 # get defensed image (big)
                 att = (att_proxy.tanh() + 1) * 0.5
-                att_def = filter(att.repeat(n, 1, 1, 1))  # use att.cpu if random-defense
+                att_def = filter(att.cpu().repeat(n, 1, 1, 1))  # use att.cpu if random-defense
                 att_def = att * (1 - mask_t) + att_def.cuda() * mask_t
                 att_def = att_def.cuda()
                 # get scaled image (small)
