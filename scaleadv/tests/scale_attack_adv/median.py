@@ -8,10 +8,8 @@ from art.estimators.classification import PyTorchClassifier
 from scaling.ScalingGenerator import ScalingGenerator
 from scaling.SuppScalingAlgorithms import SuppScalingAlgorithms
 from scaling.SuppScalingLibraries import SuppScalingLibraries
-from torch.nn import DataParallel
 
-from scaleadv.attacks.adv import IndirectPGD, IndirectShadowAttack
-from scaleadv.attacks.proxy import NoiseProxy
+from scaleadv.attacks.adv import IndirectPGD
 from scaleadv.attacks.scale_nn import ScaleAttack
 from scaleadv.attacks.utils import get_mask_from_cl_cr
 from scaleadv.datasets.imagenet import create_dataset
@@ -58,7 +56,7 @@ if __name__ == '__main__':
     """
     adv_attack = CarliniL2Method(classifier, confidence=3.0, targeted=True, binary_search_steps=20, max_iter=20)
     adv_attack = IndirectPGD(classifier, norm, sigma, epsilon, step, targeted=True, batch_size=300)
-    scl_attack = ScaleAttack(scale_net, pooling, class_net, lr=0.01, lam_inp=8.0)
+    scl_attack = ScaleAttack(scale_net, class_net, pooling, lr=0.01, lam_inp=8.0)
 
     # adv attack
     y_target = np.eye(1000, dtype=np.int)[None, target]
@@ -66,7 +64,7 @@ if __name__ == '__main__':
     print(f'ADV', classifier.predict(adv).argmax(1))
 
     # scale attack
-    att, att_inp = scl_attack.generate(src=src, tgt=adv, use_pooling=True, use_ce=False, y_tgt=target)
+    att = scl_attack.generate(src=src, tgt=adv, adaptive=True)
 
     # test adv
     ns = 'src', 'adv', 'att'

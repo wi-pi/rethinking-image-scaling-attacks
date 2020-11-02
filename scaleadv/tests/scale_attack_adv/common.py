@@ -16,7 +16,7 @@ from scaleadv.models.resnet import resnet50_imagenet
 from scaleadv.models.scaling import ScaleNet
 from scaleadv.tests.utils import resize_to_224x
 
-TAG = 'TEST.ScaleAttack.Adv'
+TAG = 'TEST.ScaleAttack.Adv.Common'
 
 if __name__ == '__main__':
     # set params
@@ -45,23 +45,17 @@ if __name__ == '__main__':
     class_net = nn.Sequential(NormalizationLayer.from_preset('imagenet'), resnet50_imagenet('2')).eval().cuda()
     classifier = PyTorchClassifier(class_net, nn.CrossEntropyLoss(), (3, 224, 224), 1000, clip_values=(0, 1))
     adv_attack = IndirectPGD(classifier, norm, sigma, epsilon, step, targeted=True)
-    scl_attack = ScaleAttack(scale_net, lam_inp=2)
+    scl_attack = ScaleAttack(scale_net, class_net, lam_inp=2.0)
 
     # adv attack
     y_target = np.eye(1000, dtype=np.int)[None, target]
     adv = adv_attack.generate(x=src_inp, y=y_target, proxy=None)
 
     # scale attack
-    att, att_inp = scl_attack.generate(src=src, tgt=adv)
-
-    # test adv
-    ns = 'SRC', 'ADV', 'ATT'
-    vs = src_inp, adv, att_inp
-    for n, v in zip(ns, vs):
-        print(n, classifier.predict(v).argmax(1)[0])
+    att = scl_attack.generate(src=src, tgt=adv, adaptive=False, test_freq=0)
 
     # save figs
     f = T.Compose([lambda x: x[0], torch.tensor, T.ToPILImage()])
-    for n in ['src', 'src_inp', 'adv', 'att', 'att_inp']:
+    for n in ['src', 'src_inp', 'adv', 'att']:
         var = locals()[n]
         f(var).save(f'{TAG}.{n}.png')

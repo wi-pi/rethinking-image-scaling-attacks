@@ -57,8 +57,9 @@ if __name__ == '__main__':
     adv_attack = IndirectPGD(classifier, norm, sigma, epsilon, step, targeted=True, batch_size=300)
     # adv_attack = CarliniL2Method(classifier, confidence=3.0, targeted=True, binary_search_steps=20, max_iter=20)
     # adv_attack = ShadowAttack(classifier, sigma=0.1, targeted=True, batch_size=300)
-    # scl_attack = ScaleAttack(scale_net, pooling, class_net, lr=0.05, lam_inp=200, nb_samples=300, max_iter=200, early_stop=True)   # for None proxy
-    scl_attack = ScaleAttack(scale_net, pooling, class_net, lr=0.05, lam_inp=40, nb_samples=200, max_iter=200, early_stop=True)
+    # scl_attack = ScaleAttack(scale_net, class_net, pooling, lr=0.05, lam_inp=200, nb_samples=200, max_iter=200, early_stop=True)   # for None proxy
+    # scl_attack = ScaleAttack(scale_net, class_net, pooling, lr=0.05, lam_inp=40, nb_samples=200, max_iter=200, early_stop=True)  # for noise proxy
+    scl_attack = ScaleAttack(scale_net, class_net, pooling, lr=0.05, lam_inp=100, nb_samples=100, max_iter=400, early_stop=True)   # for None proxy and average fintune
 
     # attack src_def instead
     if attack_pooling:
@@ -75,27 +76,24 @@ if __name__ == '__main__':
     # proxy = PoolingProxy(pooling, n=300, x_big=src, scale=scale_net)
     proxy = NoiseProxy(np.random.normal, n=300, loc=0, scale=0.1)
     y_target = np.eye(1000, dtype=np.int)[None, target]
-    adv = adv_attack.generate(x=src_inp, y=y_target, proxy=proxy)
+    adv = adv_attack.generate(x=src_inp, y=y_target, proxy=None)
     print(f'ADV', classifier.predict(adv).argmax(1))
 
     # scale attack
-    att, att_inp = scl_attack.generate(src=src, tgt=adv, use_pooling=True, use_ce=False, y_tgt=target)
-    # att, att_inp = scl_attack.generate_test(src=src, tgt=adv, y_tgt=target)
+    att = scl_attack.generate(src=src, tgt=adv, adaptive=True, mode='sample', test_freq=10)
+    # att = nn.functional.interpolate(torch.tensor(adv), src.shape[2:], mode='bilinear').numpy()
+    att_inp = scale_net(pooling(torch.tensor(att)).cuda()).cpu().numpy()
 
     # test adv
-    ns = 'src', 'adv', 'att'
-    vs = src, adv, att
-    bs = True, False, True
-    for n, v, b in zip(ns, vs, bs):
+    ns = 'src', 'att'
+    vs = src, att
+    for n, v in zip(ns, vs):
         # to tensor
         v = torch.tensor(v).cuda()
-        # no pooling
-        x = scale_net(v).cpu() if b else v.cpu()
-        print(n + ' ', classifier.predict(x).argmax(1)[0])
-        # big and pooling
-        if b:
-            x = scale_net(pooling(v.cpu()).cuda()).cpu()
-            print(n + '*', classifier.predict(x).argmax(1)[0])
+        pred = scl_attack.predict(v, scale=True, pooling=False)
+        print(f'{n}  {np.mean(pred == 100):.2%} {np.mean(pred == 200):.2%}')
+        pred = scl_attack.predict(v, scale=True, pooling=True, n=200)
+        print(f'{n}* {np.mean(pred == 100):.2%} {np.mean(pred == 200):.2%}')
 
     # save figs
     f = T.Compose([lambda x: x[0], torch.tensor, T.ToPILImage()])

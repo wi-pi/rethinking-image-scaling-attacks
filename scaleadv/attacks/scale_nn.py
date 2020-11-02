@@ -1,9 +1,3 @@
-"""
-This module implements Scaling attack with variants.
-1. Common attack, with cross-entropy support.
-2. Adaptive attack, against both deterministic and non-deterministic defenses.
-"""
-import math
 from collections import OrderedDict
 from itertools import count
 from typing import Optional
@@ -14,6 +8,7 @@ import torch.nn as nn
 import torchvision.transforms.functional as F
 from PIL import Image
 from art.config import ART_NUMPY_DTYPE
+from torch.autograd import Variable
 from tqdm import trange
 
 from scaleadv.models.layers import Pool2d, RandomPool2d
@@ -21,103 +16,178 @@ from scaleadv.models.scaling import ScaleNet
 
 EARLY_STOP_ITER = 200
 EARLY_STOP_THRESHOLD = 0.999
+TANH_TOLERANCE = 1 - 1e-6
 
 
 class ScaleAttack(object):
+    """This class implements Scaling attack with several variants.
+    1. Common Attack
+       Hide an arbitrary small image (possibly adversarial) into a large image.
+    2. Adaptive Attack
+       Like 1, but is robust to deterministic and non-deterministic defenses.
+
+    Args:
+        scale_net: scaling network of type `ScaleNet`.
+        class_net: classification network of type `nn.Module`.
+        pooling: pooling layer (defense) of type `Pool2d` (optional).
+
+    Keyword Args:
+        lr: step size for scaling attack.
+        max_iter: maximum number of iterations for scaling attack.
+        lam_inp: extra multiplier for L2 penalty of input space loss.
+        nb_samples: number of samples to approximate EE(pooling).
+        early_stop: stop optimization if loss has converged.
+    """
 
     def __init__(
             self,
             scale_net: ScaleNet,
+            class_net: nn.Module,
             pooling: Optional[Pool2d] = None,
-            class_net: Optional[nn.Module] = None,
-            max_iter: int = 1000,
             lr: float = 0.01,
+            max_iter: int = 1000,
             lam_inp: float = 1.0,
             nb_samples: int = 1,
             early_stop: bool = True,
-            tol=1e-6):
-        """
-        Create a `ScaleAttack` instance.
-
-        Args:
-            scale_net: scaling network
-            pooling: pooling layer as a defense
-            class_net: classification network
-            max_iter: maximum number of iterations.
-            lr: learning rate
-            lam_inp: lambda for loss_inp
-            nb_samples: number of samples if pooling is not deterministic
-            early_stop: stop optimization if loss has converged
-            tol: tolerance when converting to tanh space
-        """
-        if pooling is not None and nb_samples < 1:
-            raise ValueError(f'Expect at least one sample of the pooling layer, but got {nb_samples}.')
+    ):
+        if nb_samples < 1:
+            raise ValueError(f'Expect at least one sample, but got {nb_samples}.')
 
         self.scale_net = scale_net
-        self.pooling = pooling
         self.class_net = class_net
-        self.max_iter = max_iter
+        self.pooling = pooling
         self.lr = lr
+        self.max_iter = max_iter
         self.lam_inp = lam_inp
         self.nb_samples = nb_samples
         self.early_stop = early_stop
-        self.tol = tol
 
-    def generate(self,
-                 src: np.ndarray,
-                 tgt: np.ndarray,
-                 use_pooling: bool = False,
-                 use_ce: bool = False,
-                 y_tgt: int = None):
+    @staticmethod
+    def img_to_tanh(x: torch.Tensor) -> torch.Tensor:
+        x = (x * 2 - 1) * TANH_TOLERANCE
+        x = torch.atanh(x)
+        return x
+
+    @staticmethod
+    def tanh_to_img(x: torch.Tensor) -> torch.Tensor:
+        x = (x.tanh() + 1) * 0.5
+        return x
+
+    def predict(self, x: torch.Tensor, scale: bool = False, pooling: bool = False, n: int = 1) -> np.ndarray:
+        """Predict big/small image with pooling support.
+        Args:
+            x: input image of shape [1, 3, H, W].
+            scale: True if input image needs to be scaled.
+            pooling: True if you want to apply pooling before scaling.
+            n: number of samples for the pooling layer.
+
+        Returns:
+            np.ndarray containing predicted labels (multiple for n > 1).
+        """
+        with torch.no_grad():
+            if pooling:
+                assert scale, 'Cannot apply pooling without scaling.'
+                x = x.to(self.pooling.dev)  # to the device recommended by pooling
+                x = self.pooling(x.repeat(n, 1, 1, 1)).cuda()
+            if scale:
+                x = self.scale_net(x)
+            pred = self.class_net(x).argmax(1).cpu()
+
+        return pred.numpy()
+
+    def generate(
+            self,
+            src: np.ndarray,
+            tgt: np.ndarray,
+            adaptive: bool = False,
+            mode: str = 'sample',
+            test_freq: int = 0,
+    ) -> np.ndarray:
+        """Run scale-attack with given source and target images.
+
+        Args:
+            src: large source image, of shape [1, 3, H, W].
+            tgt: small target image, of shape [1, 3, h, w].
+            adaptive: True if run adaptive-attack against predefined pooling layer.
+            mode: how to approximate the random pooling, only 'sample', 'average', and 'worst' supported now.
+            test_freq: full test per `test` iterations, set 0 to disable it.
+
+        Returns:
+            np.ndarray: final large attack image
+
+        Notes:
+            1. 'worst' returns the worst result by up-sampling with linear interpolation.
+               this solves both median and random defenses with "2\beta" kernel width.
+            2. 'average' solves median defenses, but not sure for random defenses.
+               do note that this returns worse results than solving median-filter directly.
+
+        Todo:
+            1. 'average' is now using hard-coded params.
+        """
         # Check params
         for x in [src, tgt]:
             assert x.ndim == 4 and x.shape[0] == 1 and x.shape[1] == 3
             assert x.dtype == np.float32
+        if adaptive is True:
+            assert mode in ['sample', 'average', 'worst'], f'Unsupported adaptive mode "{mode}".'
 
         # Convert to tensor
         src = torch.as_tensor(src, dtype=torch.float32).cuda()
         tgt = torch.as_tensor(tgt, dtype=torch.float32).cuda()
-        factor = math.sqrt(1.0 * src.numel() / tgt.numel())
+        factor = np.sqrt(1. * src.numel() / tgt.numel())
 
-        # Prepare attack
-        var = torch.autograd.Variable(src.clone().detach(), requires_grad=True)
-        var.data = torch.atanh((var.data * 2 - 1) * (1 - self.tol))
+        # Return worst case result
+        if adaptive and mode == 'worst':
+            x = nn.functional.interpolate(tgt, src.shape[2:], mode='bilinear')
+            x = np.array(x.cpu(), dtype=ART_NUMPY_DTYPE)
+            return x
+
+        # Get predicted labels
+        y_src = self.predict(src, scale=True).item()
+        y_tgt = self.predict(tgt, scale=False).item()
+
+        # Prepare attack vars
+        var = Variable(torch.zeros_like(src), requires_grad=True)
+        var.data = self.img_to_tanh(src.data)
+        # best_init = nn.functional.interpolate(tgt, src.shape[-2:], mode='bilinear')
+        # var.data = self.img_to_tanh(best_init.data)
+
+        # Prepare attack optimizer
         optimizer = torch.optim.Adam([var], lr=self.lr)
-        if use_ce:
-            y_tgt = torch.LongTensor([y_tgt]).repeat((self.nb_samples,)).cuda()
 
         # Start attack
-        with trange(self.max_iter, desc='ScaleAttack') as pbar:
+        desc = 'ScaleAttack' + (' (adaptive)' if adaptive else '')
+        with trange(self.max_iter, desc=desc) as pbar:
             prev_loss = np.inf
             for i in pbar:
                 # Get attack image (big)
-                att = (var.tanh() + 1) * 0.5
+                att = self.tanh_to_img(var)
 
                 # Get defensed image (big)
                 att_def = att
-                if use_pooling:
-                    if isinstance(self.pooling, RandomPool2d):
-                        att_def = att_def.cpu()
-                    att_def = att_def.repeat(self.nb_samples, 1, 1, 1)
-                    att_def = self.pooling(att_def).cuda()
+                if adaptive:
+                    if mode == 'sample':
+                        att_def = att_def.to(self.pooling.dev)
+                        att_def = att_def.repeat(self.nb_samples, 1, 1, 1)
+                        att_def = self.pooling(att_def).cuda()
+                    elif mode == 'average':
+                        p, k, s = 2, 5, 3
+                        # p, k, s = 2, 5, 1
+                        att_def = nn.functional.pad(att_def, [p, p, p, p], mode='reflect')
+                        att_def = nn.functional.avg_pool2d(att_def, k, s)
+                        # att_def = self.scale_net(att_def)
 
                 # Get scaled image (small)
-                """Note
-                1. Add avg_pool2d beats all defenses (worst case attack)
-                2. Common median-adaptive attack get better results. (so median is less robust than random)
-                """
-                # att_def = nn.functional.pad(att_def, [1, 1, 1, 1], mode='reflect')
-                # att_def = nn.functional.avg_pool2d(att_def, 3, 1)
-                inp = self.scale_net(att_def)
+                if adaptive and mode == 'average':
+                    inp = att_def
+                else:
+                    inp = self.scale_net(att_def)
 
                 # Compute loss
                 loss = OrderedDict()
                 loss['BIG'] = (src - att).reshape(att.shape[0], -1).norm(2, dim=1).mean()
                 loss['INP'] = (tgt - inp).reshape(inp.shape[0], -1).norm(2, dim=1).mean() * factor
-                if use_ce:
-                    pred = self.class_net(inp)
-                    loss['CLS'] = nn.functional.cross_entropy(pred, y_tgt, reduction='mean')
-                total_loss = loss['BIG'] + self.lam_inp * loss['INP'] + loss.get('CLS', 0)
+                total_loss = loss['BIG'] + self.lam_inp * loss['INP']
 
                 # Optimize
                 optimizer.zero_grad()
@@ -127,16 +197,21 @@ class ScaleAttack(object):
                 # Logging
                 loss['TOTAL'] = total_loss
                 stats = OrderedDict({k: f'{v.cpu().item():.3f}' for k, v in loss.items()})
-                if use_ce:
-                    with torch.no_grad():
-                        if pred.shape[0] == 1:
-                            stats['PRED'] = pred.argmax(1)[0].cpu().item()
-                        else:
-                            acc = (pred.argmax(1) == 100).float().mean().cpu().item()
-                            stats['PRED-100'] = f'{acc:.2%}'
-                            acc = (pred.argmax(1) == 200).float().mean().cpu().item()
-                            stats['PRED-200'] = f'{acc:.2%}'
+                with torch.no_grad():
+                    pred = self.predict(inp)
+                    if pred.shape[0] == 1:
+                        stats['PRED'] = pred.item()
+                    else:
+                        for y in [y_src, y_tgt]:
+                            stats[f'PRED-{y}'] = f'{np.mean(pred == y):.2%}'
                 pbar.set_postfix(stats)
+
+                # Test
+                if test_freq and i % test_freq == 0:
+                    pred = self.predict(att, scale=True, pooling=True)
+                    for y in [y_src, y_tgt]:
+                        print(f'Test {y}: {np.mean(pred == y):.2%}')
+                    F.to_pil_image(att[0].cpu().detach()).save(f'ADV-{i:03d}.png')
 
                 # Early stop
                 if self.early_stop and i % EARLY_STOP_ITER == 0:
@@ -144,17 +219,9 @@ class ScaleAttack(object):
                         break
                     prev_loss = total_loss
 
-                # Test
-                if False and i % 10 == 0:
-                    pred = self.test(att, n=self.nb_samples)
-                    print(f'Test 100: {np.mean(pred == 100):.2%}')
-                    print(f'Test 200: {np.mean(pred == 200):.2%}')
-                    F.to_pil_image(att[0].cpu().detach()).save(f'ADV-{i:03d}.png')
-
         # Convert to numpy
         att = np.array(att.detach().cpu(), dtype=ART_NUMPY_DTYPE)
-        inp = np.array(inp.detach().cpu(), dtype=ART_NUMPY_DTYPE)
-        return att, inp
+        return att
 
     def generate_L0(self, src: np.ndarray, tgt: np.ndarray):
         """Test only, did not pass the test yet.
@@ -334,14 +401,6 @@ class ScaleAttack(object):
             Image.fromarray(np.round(att.cpu().detach().numpy()[0] * 255).astype(np.uint8).transpose((1, 2, 0))).save(
                 f'test-{i}.png')
         return att, inp
-
-    def test(self, x: np.ndarray, n: int):
-        x = torch.as_tensor(x, dtype=torch.float32)
-        with torch.no_grad():
-            xs = self.pooling(x.cpu().repeat(n, 1, 1, 1)).cuda()
-            xs = self.scale_net(xs)
-            pred = self.class_net(xs).argmax(1)
-        return pred.cpu().numpy()
 
     def generate_with_given_pooling_shadow(self,
                                            src: np.ndarray,

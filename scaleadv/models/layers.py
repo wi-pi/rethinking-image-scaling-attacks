@@ -39,6 +39,8 @@ class NormalizationLayer(nn.Module):
 
 class Pool2d(nn.Module):
 
+    dev = torch.device('cuda')
+
     def __init__(self, kernel_size: int, stride: int, padding: int, mask: Optional[np.ndarray] = None):
         """
         Args:
@@ -68,6 +70,8 @@ class MedianPool2d(Pool2d):
 
 
 class RandomPool2d(Pool2d):
+
+    dev = torch.device('cpu')
 
     def _gen_idx(self, n, gap, shape, expand=False):
         B, C, H, W = shape
