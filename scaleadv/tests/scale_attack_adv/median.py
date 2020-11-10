@@ -1,7 +1,5 @@
 import numpy as np
-import torch
 import torch.nn as nn
-import torchvision.transforms as T
 import torchvision.transforms.functional as F
 from art.attacks.evasion import CarliniL2Method
 from art.estimators.classification import PyTorchClassifier
@@ -16,19 +14,19 @@ from scaleadv.datasets.imagenet import create_dataset
 from scaleadv.models.layers import NormalizationLayer, MedianPool2d
 from scaleadv.models.resnet import resnet50_imagenet
 from scaleadv.models.scaling import ScaleNet
-from scaleadv.tests.utils import resize_to_224x
-
-TAG = 'TEST.ScaleAttack.Adv.Median.Common'
+from scaleadv.tests.utils import resize_to_224x, Evaluator
 
 if __name__ == '__main__':
     # set params
-    norm, sigma, step = 2, 20, 30
+    norm, sigma, step = 2, 40, 30
     epsilon = sigma * 2.5 / step
     target = 200
+    ID = 5000
+    TAG = f'MED-{ID}.Sig{sigma}'
 
     # load data
     dataset = create_dataset(transform=None)
-    src, _ = dataset[5000]
+    src, _ = dataset[ID]
     src = resize_to_224x(src)
     src = np.array(src)
 
@@ -56,33 +54,15 @@ if __name__ == '__main__':
     """
     adv_attack = CarliniL2Method(classifier, confidence=3.0, targeted=True, binary_search_steps=20, max_iter=20)
     adv_attack = IndirectPGD(classifier, norm, sigma, epsilon, step, targeted=True, batch_size=300)
-    scl_attack = ScaleAttack(scale_net, class_net, pooling, lr=0.01, lam_inp=8.0)
+    scl_attack = ScaleAttack(scale_net, class_net, pooling, lr=0.01, lam_inp=4.0, early_stop=False)
 
     # adv attack
     y_target = np.eye(1000, dtype=np.int)[None, target]
     adv = adv_attack.generate(x=src_inp, y=y_target)
-    print(f'ADV', classifier.predict(adv).argmax(1))
 
     # scale attack
-    att = scl_attack.generate(src=src, tgt=adv, adaptive=True)
+    att = scl_attack.generate(src=src, tgt=adv, adaptive=True, include_self=False)
 
-    # test adv
-    ns = 'src', 'adv', 'att'
-    vs = src, adv, att
-    bs = True, False, True
-    for n, v, b in zip(ns, vs, bs):
-        # to tensor
-        v = torch.tensor(v).cuda()
-        # no pooling
-        x = scale_net(v).cpu() if b else v.cpu()
-        print(n + ' ', classifier.predict(x).argmax(1)[0])
-        # big and pooling
-        if b:
-            x = scale_net(pooling(v)).cpu()
-            print(n + '*', classifier.predict(x).argmax(1)[0])
-
-    # save figs
-    f = T.Compose([lambda x: x[0], torch.tensor, T.ToPILImage()])
-    for n in ['src', 'src_inp', 'adv', 'att', 'att_inp']:
-        var = locals()[n]
-        f(var).save(f'{TAG}.{n}.png')
+    # test
+    E = Evaluator(scale_net, class_net, (5, 1, 2, mask))
+    E.eval(src, adv, att, summary=True, tag=TAG, save='.')

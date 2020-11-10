@@ -1,7 +1,5 @@
 import numpy as np
-import torch
 import torch.nn as nn
-import torchvision.transforms as T
 import torchvision.transforms.functional as F
 from art.estimators.classification import PyTorchClassifier
 from scaling.ScalingGenerator import ScalingGenerator
@@ -10,23 +8,24 @@ from scaling.SuppScalingLibraries import SuppScalingLibraries
 
 from scaleadv.attacks.adv import IndirectPGD
 from scaleadv.attacks.scale_nn import ScaleAttack
+from scaleadv.attacks.utils import get_mask_from_cl_cr
 from scaleadv.datasets.imagenet import create_dataset
 from scaleadv.models.layers import NormalizationLayer
 from scaleadv.models.resnet import resnet50_imagenet
 from scaleadv.models.scaling import ScaleNet
-from scaleadv.tests.utils import resize_to_224x
-
-TAG = 'TEST.ScaleAttack.Adv.Common'
+from scaleadv.tests.utils import resize_to_224x, Evaluator
 
 if __name__ == '__main__':
     # set params
     norm, sigma, step = 2, 20, 30
     epsilon = sigma * 2.5 / step
     target = 200
+    ID = 5000
+    TAG = f'COM-{ID}'
 
     # load data
     dataset = create_dataset(transform=None)
-    src, _ = dataset[5000]
+    src, _ = dataset[ID]
     src = resize_to_224x(src)
     src = np.array(src)
 
@@ -54,8 +53,7 @@ if __name__ == '__main__':
     # scale attack
     att = scl_attack.generate(src=src, tgt=adv, adaptive=False, test_freq=0)
 
-    # save figs
-    f = T.Compose([lambda x: x[0], torch.tensor, T.ToPILImage()])
-    for n in ['src', 'src_inp', 'adv', 'att']:
-        var = locals()[n]
-        f(var).save(f'{TAG}.{n}.png')
+    # test
+    mask = get_mask_from_cl_cr(scaling.cl_matrix, scaling.cr_matrix)
+    E = Evaluator(scale_net, class_net, (5, 1, 2, mask))
+    E.eval(src, adv, att, summary=True, tag=TAG, save='.')
