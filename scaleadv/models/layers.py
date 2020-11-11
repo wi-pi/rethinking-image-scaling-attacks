@@ -38,7 +38,6 @@ class NormalizationLayer(nn.Module):
 
 
 class Pool2d(nn.Module):
-
     dev = torch.device('cuda')
 
     def __init__(self, kernel_size: int, stride: int, padding: int, mask: Optional[np.ndarray] = None):
@@ -54,6 +53,15 @@ class Pool2d(nn.Module):
         self.stride = _pair(stride)
         self.padding = _quadruple(padding)  # convert to l, r, t, b
         self.mask = None if mask is None else torch.as_tensor(mask, dtype=torch.float32)
+
+
+class NonePool2d(Pool2d):
+
+    def __init__(self):
+        super(NonePool2d, self).__init__(0, 0, 0, None)
+
+    def forward(self, x: torch.Tensor):
+        return x
 
 
 class MedianPool2d(Pool2d):
@@ -73,7 +81,6 @@ class MedianPool2d(Pool2d):
 
 
 class RandomPool2d(Pool2d):
-
     dev = torch.device('cpu')
     cache = None
 

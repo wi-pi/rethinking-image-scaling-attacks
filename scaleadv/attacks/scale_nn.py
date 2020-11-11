@@ -211,7 +211,7 @@ class ScaleAttack(object):
                 pbar.set_postfix(stats)
 
                 # Update direction according to predictions
-                if np.mean(pred == y_tgt) > 0.5:
+                if np.mean(pred == y_tgt) > 0.95:
                     lam_inp = 1
                     if loss['BIG'] < best_att_l2:
                         best_att, best_att_l2 = att.detach().clone(), loss['BIG']
@@ -255,6 +255,9 @@ class ScaleAttack(object):
             1. lam_ce is now using hard-coded value.
             2. Add other regularization like Shadow Attack.
             3. Save best-adv like `generate`.
+            4. Accelerate like iterative_bypass
+                (1) by optimize over delta, not var.
+                (2) consider if pooling[reuse] is good enough compared to (1)
         """
         # Check params
         assert src.ndim == 4 and src.shape[0] == 1 and src.shape[1] == 3
@@ -285,7 +288,7 @@ class ScaleAttack(object):
                     self.pooling.cache = None
                 att_def = att.to(self.pooling.dev)
                 att_def = att_def.repeat(self.nb_samples, 1, 1, 1)
-                att_def = self.pooling(att_def, reuse=True).cuda()
+                att_def = self.pooling(att_def, reuse=False).cuda()
 
                 # Get scaled image (small)
                 inp = self.scale_net(att_def)
