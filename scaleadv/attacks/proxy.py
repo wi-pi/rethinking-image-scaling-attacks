@@ -28,10 +28,10 @@ class Proxy(object):
 
 class PoolingProxy(Proxy):
 
-    def __init__(self, pooling: nn.Module, n: int, x_big: np.ndarray, scale: ScaleNet):
+    def __init__(self, pooling: nn.Module, n: int, x_big: np.ndarray, scale: ScaleNet = None):
         super(PoolingProxy, self).__init__(pooling, n)
         self.x_big = x_big
-        self.scale = scale
+        self.scale = scale if scale is not None else lambda x: x
 
     def _augment(self, x: np.ndarray) -> np.ndarray:
         with torch.no_grad():

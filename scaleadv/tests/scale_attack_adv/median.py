@@ -62,6 +62,7 @@ if __name__ == '__main__':
 
     # scale attack
     att = scl_attack.generate(src=src, tgt=adv, adaptive=True, include_self=False)
+    # att = scl_attack.generate_optimal(src=src, target=target)
 
     # test
     E = Evaluator(scale_net, class_net, (5, 1, 2, mask))

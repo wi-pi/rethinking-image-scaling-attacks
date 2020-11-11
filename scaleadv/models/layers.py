@@ -59,19 +59,23 @@ class Pool2d(nn.Module):
 class MedianPool2d(Pool2d):
 
     def forward(self, x: torch.Tensor):
-        x_raw = x
+        med = self.unfold(x).median(dim=-1)[0]
+        if self.mask is not None:
+            mask = self.mask = self.mask.to(x.device)
+            med = x * (1 - mask) + med * mask
+        return med
+
+    def unfold(self, x: torch.Tensor):
         x = F.pad(x, self.padding, mode='reflect')
         x = x.unfold(2, self.kernel_size[0], self.stride[0]).unfold(3, self.kernel_size[1], self.stride[1])
-        x = x.contiguous().view(x.size()[:4] + (-1,)).median(dim=-1)[0]
-        if self.mask is not None:
-            self.mask = self.mask.to(x.device)
-            x = x_raw * (1 - self.mask) + x * self.mask
+        x = x.contiguous().view(x.size()[:4] + (-1,))
         return x
 
 
 class RandomPool2d(Pool2d):
 
     dev = torch.device('cpu')
+    cache = None
 
     def _gen_idx(self, n, gap, shape, expand=False):
         B, C, H, W = shape
@@ -83,19 +87,23 @@ class RandomPool2d(Pool2d):
         idx = idx[:, None, ...].repeat(1, C, 1, 1).flatten()
         return idx
 
-    def forward(self, x):
+    def forward(self, x, reuse=False):
         x_raw = x
         padding = pl, _, pt, _ = self.padding
         in_shape = B, C, H, W = x.shape  # Note this is the shape of x BEFORE padding.
         # generate index
-        idx_c = torch.arange(B * C)[:, None].repeat(1, H * W).flatten()
-        idx_h = self._gen_idx(H, pt, in_shape, expand=True)
-        idx_w = self._gen_idx(W, pl, in_shape, expand=False)
+        if reuse and self.cache is not None:
+            idx_c, idx_h, idx_w = self.cache
+        else:
+            idx_c = torch.arange(B * C)[:, None].repeat(1, H * W).flatten()
+            idx_h = self._gen_idx(H, pt, in_shape, expand=True)
+            idx_w = self._gen_idx(W, pl, in_shape, expand=False)
+            self.cache = idx_c, idx_h, idx_w
         # padding & take
         x = F.pad(x, padding, mode='reflect')
-        x = x.reshape(-1, *x.shape[2:])[idx_c, idx_h, idx_w].reshape(in_shape)
+        x = x.view(-1, *x.shape[2:])[idx_c, idx_h, idx_w].view(in_shape)
         if self.mask is not None:
-            self.mask.to(x.device)
+            self.mask = self.mask.to(x.device)
             x = x_raw * (1 - self.mask) + x * self.mask
         return x
 
