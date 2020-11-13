@@ -59,7 +59,10 @@ class Evaluator(object):
             row.append(p)
             # distance metrics
             for field in self.DIFF_FIELDS[3:]:
-                row.append(f'{data[field].cpu().item():.3f}')
+                if field in data:
+                    row.append(f'{data[field].cpu().item():.3f}')
+                else:
+                    row.append('-')
             tab.add_row(row)
         return tab
 

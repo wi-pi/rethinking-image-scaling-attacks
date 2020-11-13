@@ -74,15 +74,15 @@ if __name__ == '__main__':
 
     # Adv-Attack on src
     full_net = FullScaleNet(scale_net, class_net, pooling, n=NUM_SAMPLES_PROXY)
-    y_src = class_net(src_inp).argmax(1).cpu().item()
+    y_src = classifier.predict(src_inp).argmax(1).item()
     new_args = dict(nb_samples=NUM_SAMPLES_SAMPLE, verbose=True, y_cmp=[y_src, args.target])
     classifier = AverageGradientClassifier(full_net, ReducedCrossEntropyLoss(), tuple(src.shape[1:]), NUM_CLASSES,
                                            **new_args, clip_values=(0, 1))
     eps = args.eps * 2
     eps_step = 3 * eps / args.step
-    adv_attack = IndirectPGD(classifier, 2, eps, eps_step, args.step * 4, targeted=True, batch_size=NUM_SAMPLES_PROXY)
+    adv_attack = IndirectPGD(classifier, 2, eps, eps_step, args.step * 3, targeted=True, batch_size=NUM_SAMPLES_PROXY)
     att = adv_attack.generate(x=src, y=y_target, proxy=None)
 
     # Test
     e = Evaluator(scale_net, class_net, pooling_args)
-    e.eval(src, adv, att, summary=True, tag=f'{args.id}.{args.defense}.{args.mode}.eps{args.eps}', save='.')
+    e.eval(src, adv, att, summary=True, tag=f'{args.id}.{args.defense}.optimal.eps{args.eps}', save='.')

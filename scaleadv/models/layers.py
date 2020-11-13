@@ -116,14 +116,21 @@ class RandomPool2d(Pool2d):
 
     def forward_potential(self, x):
         x_raw = x
+        # move channel to 1st
         x = x.permute(1, 0, 2, 3)
+        # padding
         x = F.pad(x, self.padding, mode='reflect')
+        # unfold and take each sub-matrix
         x = x.unfold(2, self.kernel_size[0], self.stride[0]).unfold(3, self.kernel_size[1], self.stride[1])
         x = x.contiguous().view(x.size()[:4] + (-1,))
-        idx = torch.eye(x.shape[-1])[torch.randint(x.shape[-1], x.shape[1:-1])]
-        x = (x * idx).sum(-1).permute(1, 0, 2, 3)
+        # generate idx for one channel
+        idx = torch.randint(0, x.shape[-1], x.shape[1:-1] + (1,))
+        # gather in each channel
+        x = torch.stack([x[i].gather(-1, idx).squeeze(-1) for i in range(x.shape[0])])
+        # move channel to 2nd
+        x = x.permute(1, 0, 2, 3)
 
         if self.mask is not None:
-            self.mask.to(x.device)
+            self.mask = self.mask.to(x.device)
             x = x_raw * (1 - self.mask) + x * self.mask
         return x

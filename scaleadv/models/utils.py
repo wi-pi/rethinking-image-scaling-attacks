@@ -22,6 +22,7 @@ class AverageGradientClassifier(PyTorchClassifier):
         self.nb_samples = nb_samples
         self.verbose = verbose
         self.y_cmp = y_cmp
+        self.cnt = 0
 
     def loss_gradient_framework(self, x: "torch.Tensor", y: "torch.Tensor", **kwargs) -> "torch.Tensor":
         import torch  # lgtm [py/repeated-import]
@@ -40,11 +41,12 @@ class AverageGradientClassifier(PyTorchClassifier):
 
         # Logging
         if self.verbose:
+            self.cnt += 1
             p = model_outputs[-1].detach().cpu().numpy().argmax(1)
             stats = OrderedDict({'LOSS': f'{loss.cpu().item():.3f}'})
             for y in self.y_cmp:
                 stats[f'PRED-{y}'] = f'{np.mean(p == y):.2%}'
-            print(' '.join([f'{k}: {v}' for k, v in stats.items()]))
+            print(self.cnt, ' '.join([f'{k}: {v}' for k, v in stats.items()]))
 
         # Clean gradients
         self._model.zero_grad()
