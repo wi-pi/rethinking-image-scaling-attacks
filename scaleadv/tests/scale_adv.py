@@ -23,7 +23,7 @@ from scaling.SuppScalingLibraries import SuppScalingLibraries
 from scaleadv.attacks.adv import IndirectPGD
 from scaleadv.attacks.proxy import NoiseProxy
 from scaleadv.attacks.scale_nn import ScaleAttack
-from scaleadv.attacks.utils import get_mask_from_cl_cr
+from scaleadv.attacks.utils import get_mask_from_cl_cr, mask_std
 from scaleadv.datasets.imagenet import IMAGENET_NUM_CLASSES
 from scaleadv.datasets.imagenet import create_dataset
 from scaleadv.models.layers import NonePool2d, AveragePool2d, LaplacianPool2d
@@ -109,6 +109,11 @@ if __name__ == '__main__':
     nb_samples = NUM_SAMPLES_SAMPLE if args.defense in ['random', 'laplace'] else 1
     if args.defense:
         pooling = POOLING[args.defense](*pooling_args)
+    if args.defense == 'laplace':
+        rnd = RandomPool2d(*pooling_args)
+        std = mask_std(src, rnd)
+        pooling.update_dist(scale=std)
+        print('Estimate std:', f'{std:.3f}')
 
     # Load networks
     scale_net = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval()

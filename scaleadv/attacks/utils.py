@@ -1,5 +1,8 @@
 import numpy as np
 import numpy.linalg as LA
+import torch
+
+from scaleadv.models.layers import RandomPool2d
 
 
 def get_mask_from_cl_cr(cl: np.ndarray, cr: np.ndarray) -> np.ndarray:
@@ -7,3 +10,25 @@ def get_mask_from_cl_cr(cl: np.ndarray, cr: np.ndarray) -> np.ndarray:
     shape = (cli.shape[1], cri.shape[0])
     mask = cli @ np.ones(shape) @ cri
     return mask.round().astype(np.uint8)
+
+
+def _mask_diff(x: np.ndarray, pooling: RandomPool2d, n: int):
+    assert x.ndim == 4 and x.shape[0] == 1
+    x = torch.as_tensor(x, dtype=torch.float32)
+    p = pooling(x, n)
+    diff = (p - x).permute(2, 3, 0, 1)
+    diff = diff[pooling.mask > 0, ...].flatten()
+    return diff
+
+
+def mask_std(x: np.ndarray, pooling: RandomPool2d, n=100):
+    assert x.ndim == 4 and x.shape[0] == 1
+    return _mask_diff(x, pooling, n).std().cpu().item()
+
+
+def mask_hist(x: np.ndarray, pooling: RandomPool2d, n: int = 100, bins: int = 100, min: int = -1, max: int = 1):
+    assert x.ndim == 4 and x.shape[0] == 1
+    diff = _mask_diff(x, pooling, n)
+    hist = torch.histc(diff, bins=bins, min=min, max=max).numpy()
+    xs = np.arange(min, max, (max - min) / bins)
+    return xs, hist, diff.mean().item(), diff.std().item()

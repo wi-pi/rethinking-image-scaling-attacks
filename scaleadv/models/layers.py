@@ -104,6 +104,9 @@ class LaplacianPool2d(Pool2d):
         self.avg = AveragePool2d(*args) if avg is True else None
         self.noise = None
 
+    def update_dist(self, loc=0, scale=0.1):
+        self.dist = Laplace(loc, scale)
+
     def forward(self, x: torch.Tensor, n: int = 1, *args, **kwargs):
         if self.avg is not None:
             x = self.avg(x)
