@@ -110,7 +110,7 @@ class ScaleAttack(object):
             src: large source image, of shape [1, 3, H, W].
             tgt: small target image, of shape [1, 3, h, w].
             adaptive: True if run adaptive-attack against predefined pooling layer.
-            mode: how to approximate the random pooling, only 'sample', 'average', and 'worst' supported now.
+            mode: how to approximate the random pooling, only 'sample' and 'worst' supported now.
             test_freq: full test per `test` iterations, set 0 to disable it.
             include_self: True if you want the attack image is adversarial without pooling.
 
@@ -120,11 +120,6 @@ class ScaleAttack(object):
         Notes:
             1. 'worst' returns the worst result by up-sampling with linear interpolation.
                this solves both median and random defenses with "2\beta" kernel width.
-            2. 'average' solves median defenses, but not sure for random defenses.
-               do note that this returns worse results than solving median-filter directly.
-
-        Todo:
-            1. 'average' is now using hard-coded params.
         """
         # Check params
         for x in [src, tgt]:
@@ -172,16 +167,11 @@ class ScaleAttack(object):
                         att_def = self.pooling(att_def, self.nb_samples)
                         if include_self:
                             att_def = torch.cat([att_def, att])  # include unpooling as well
-                    elif mode == 'average':
-                        p, k, s = 2, 5, 3
-                        att_def = nn.functional.pad(att_def, [p, p, p, p], mode='reflect')
-                        att_def = nn.functional.avg_pool2d(att_def, k, s)
+                    else:
+                        raise NotImplementedError
 
                 # Get scaled image (small)
-                if adaptive and mode == 'average':
-                    inp = att_def
-                else:
-                    inp = self.scale_net(att_def)
+                inp = self.scale_net(att_def)
 
                 # Compute loss
                 loss = OrderedDict()
@@ -251,9 +241,6 @@ class ScaleAttack(object):
             1. lam_ce is now using hard-coded value.
             2. Add other regularization like Shadow Attack.
             3. Save best-adv like `generate`.
-            4. Accelerate like iterative_bypass
-                (1) by optimize over delta, not var.
-                (2) consider if pooling[reuse] is good enough compared to (1)
         """
         # Check params
         assert src.ndim == 4 and src.shape[0] == 1 and src.shape[1] == 3
