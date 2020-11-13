@@ -1,3 +1,6 @@
+"""
+This module is depreciated, due to its implementations are replicated in scaleadv.attacks.scale_nn.
+"""
 import numpy as np
 import numpy.linalg as LA
 import torch
@@ -15,13 +18,12 @@ from torch.autograd import Variable
 from torch.nn import DataParallel
 from tqdm import trange
 
-from scaleadv.attacks.adv import IndirectPGD
 from scaleadv.bypass.random import resize_to_224x
 from scaleadv.datasets.imagenet import create_dataset, IMAGENET_MEAN, IMAGENET_STD
 from scaleadv.models.layers import MedianPool2d, RandomPool2d
 from scaleadv.models.layers import NormalizationLayer
 from scaleadv.models.scaling import ScaleNet
-from scaleadv.tests.gen_adv_pgd import get_model
+from scaleadv.depreciated.gen_adv_pgd import get_model
 
 MODEL_PATH = {
     np.inf: 'static/models/imagenet_linf_4.pt',
