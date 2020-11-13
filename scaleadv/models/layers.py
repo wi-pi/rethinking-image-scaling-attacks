@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions.laplace import Laplace
 from torch.nn.modules.utils import _pair, _quadruple
 
 from scaleadv.datasets.imagenet import IMAGENET_STD, IMAGENET_MEAN
@@ -40,7 +41,13 @@ class NormalizationLayer(nn.Module):
 class Pool2d(nn.Module):
     dev = torch.device('cuda')
 
-    def __init__(self, kernel_size: int, stride: int, padding: int, mask: Optional[np.ndarray] = None):
+    def __init__(
+            self,
+            kernel_size: int = 0,
+            stride: int = 0,
+            padding: int = 0,
+            mask: Optional[np.ndarray] = None,
+    ):
         """
         Args:
             kernel_size: size of pooling kernel, int or 2-tuple
@@ -52,28 +59,70 @@ class Pool2d(nn.Module):
         self.kernel_size = _pair(kernel_size)
         self.stride = _pair(stride)
         self.padding = _quadruple(padding)  # convert to l, r, t, b
-        self.mask = None if mask is None else torch.as_tensor(mask, dtype=torch.float32)
+        self.mask = 1 if mask is None else torch.as_tensor(mask, dtype=torch.float32).to(self.dev)
+        self.protect_mask = 1 - self.mask
+
+    def forward(self, x: torch.Tensor, n: int = 1, *args, **kwargs):
+        # preprocess
+        prev_dev = x.device
+        x = x.to(self.dev).repeat(n, 1, 1, 1)
+        # pooling
+        x = x * self.protect_mask + self._pool(x, *args, **kwargs) * self.mask
+        return x.to(prev_dev)
+
+    def _pool(self, x: torch.Tensor, *args, **kwargs):
+        raise NotImplementedError
 
 
 class NonePool2d(Pool2d):
 
-    def __init__(self):
-        super(NonePool2d, self).__init__(0, 0, 0, None)
+    def _pool(self, x: torch.Tensor, *args, **kwargs):
+        return x
 
-    def forward(self, x: torch.Tensor):
+
+class NoisePool2d(Pool2d):
+    std = 0.1
+
+    def _pool(self, x: torch.Tensor, *args, **kwargs):
+        x = x + torch.randn_like(x) * self.std
+        return x
+
+
+class AveragePool2d(Pool2d):
+
+    def _pool(self, x: torch.Tensor, *args, **kwargs):
+        x = F.pad(x, self.padding, mode='reflect')
+        x = F.avg_pool2d(x, self.kernel_size, stride=1)
+        return x
+
+
+class LaplacianPool2d(Pool2d):
+    dist = Laplace(loc=0, scale=0.1)
+
+    def __init__(self, *args, avg=True):
+        super(LaplacianPool2d, self).__init__(*args)
+        self.avg = AveragePool2d(*args) if avg is True else None
+        self.noise = None
+
+    def forward(self, x: torch.Tensor, n: int = 1, *args, **kwargs):
+        if self.avg is not None:
+            x = self.avg(x)
+        return super(LaplacianPool2d, self).forward(x, n)
+
+    def _pool(self, x: torch.Tensor, *args, **kwargs):
+        if self.noise is None or self.noise.shape[0] != x.shape[0]:
+            self.noise = self.dist.sample(x.shape).to(self.dev)
+        x = torch.clamp(x + self.noise, 0, 1)
         return x
 
 
 class MedianPool2d(Pool2d):
 
-    def forward(self, x: torch.Tensor):
-        med = self.unfold(x).median(dim=-1)[0]
-        if self.mask is not None:
-            mask = self.mask = self.mask.to(x.device)
-            med = x * (1 - mask) + med * mask
+    def _pool(self, x: torch.Tensor, *args, **kwargs):
+        med = self._unfold(x).median(dim=-1)[0]
         return med
 
-    def unfold(self, x: torch.Tensor):
+    def _unfold(self, x: torch.Tensor):
         x = F.pad(x, self.padding, mode='reflect')
         x = x.unfold(2, self.kernel_size[0], self.stride[0]).unfold(3, self.kernel_size[1], self.stride[1])
         x = x.contiguous().view(x.size()[:4] + (-1,))
@@ -94,8 +143,7 @@ class RandomPool2d(Pool2d):
         idx = idx[:, None, ...].repeat(1, C, 1, 1).flatten()
         return idx
 
-    def forward(self, x, reuse=False):
-        x_raw = x
+    def _pool(self, x, reuse=False, *args, **kwargs):
         padding = pl, _, pt, _ = self.padding
         in_shape = B, C, H, W = x.shape  # Note this is the shape of x BEFORE padding.
         # generate index
@@ -109,12 +157,9 @@ class RandomPool2d(Pool2d):
         # padding & take
         x = F.pad(x, padding, mode='reflect')
         x = x.view(-1, *x.shape[2:])[idx_c, idx_h, idx_w].view(in_shape)
-        if self.mask is not None:
-            self.mask = self.mask.to(x.device)
-            x = x_raw * (1 - self.mask) + x * self.mask
         return x
 
-    def forward_potential(self, x):
+    def _pool_potential(self, x):
         x_raw = x
         # move channel to 1st
         x = x.permute(1, 0, 2, 3)
@@ -129,8 +174,4 @@ class RandomPool2d(Pool2d):
         x = torch.stack([x[i].gather(-1, idx).squeeze(-1) for i in range(x.shape[0])])
         # move channel to 2nd
         x = x.permute(1, 0, 2, 3)
-
-        if self.mask is not None:
-            self.mask = self.mask.to(x.device)
-            x = x_raw * (1 - self.mask) + x * self.mask
         return x

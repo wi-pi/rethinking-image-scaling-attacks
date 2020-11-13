@@ -87,8 +87,7 @@ class Evaluator(object):
                     func, n = self.pooling_rnd, self.nb_samples
                 else:
                     raise NotImplementedError
-                x = x.to(func.dev).repeat(n, 1, 1, 1)
-                x = func(x).cuda()
+                x = func(x, n)
             if scale:
                 x = self.scale_net(x)
             pred = self.class_net(x).argmax(1).cpu()
@@ -182,8 +181,8 @@ class Evaluator(object):
         # big images
         imgs = {
             'plain': x,
-            'median': self.pooling_med(x.to(self.pooling_med.dev)),
-            'random': self.pooling_rnd(x.to(self.pooling_rnd.dev)),
+            'median': self.pooling_med(x),
+            'random': self.pooling_rnd(x),
         }
 
         # get input and save

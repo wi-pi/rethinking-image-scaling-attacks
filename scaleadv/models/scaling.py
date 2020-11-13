@@ -27,8 +27,7 @@ class FullScaleNet(nn.Module):
 
     def forward(self, x):
         if self.n > 0:
-            x = x.to(self.pooling.dev).repeat(self.n, 1, 1, 1)
-            x = self.pooling(x).cuda()
+            x = self.pooling(x, n=self.n)
         x = self.scale_net(x)
         y = self.class_net(x)
         return y

@@ -26,7 +26,7 @@ from scaleadv.attacks.scale_nn import ScaleAttack
 from scaleadv.attacks.utils import get_mask_from_cl_cr
 from scaleadv.datasets.imagenet import IMAGENET_NUM_CLASSES
 from scaleadv.datasets.imagenet import create_dataset
-from scaleadv.models.layers import NonePool2d
+from scaleadv.models.layers import NonePool2d, AveragePool2d, LaplacianPool2d
 from scaleadv.models.layers import NormalizationLayer, MedianPool2d, RandomPool2d
 from scaleadv.models.parallel import BalancedDataParallel
 from scaleadv.models.resnet import resnet50_imagenet
@@ -45,6 +45,8 @@ ADAPTIVE_MODE = ['none', 'sample', 'worst', 'optimal']
 POOLING = {
     'median': MedianPool2d,
     'random': RandomPool2d,
+    'average': AveragePool2d,
+    'laplace': LaplacianPool2d,
 }
 
 # Hard-coded arguments
@@ -102,14 +104,16 @@ if __name__ == '__main__':
     # Load pooling
     # TODO: Support non-square pooling
     pooling = NonePool2d()
-    pooling_args = (sr_h * 2 - 1, 1, sr_h - 1, mask)
+    k = sr_h * 2 - 1
+    pooling_args = (k, 1, k // 2, mask)
+    nb_samples = NUM_SAMPLES_SAMPLE if args.defense in ['random', 'laplace'] else 1
     if args.defense:
         pooling = POOLING[args.defense](*pooling_args)
 
     # Load networks
     scale_net = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval()
     class_net = nn.Sequential(NormalizationLayer.from_preset('imagenet'), resnet50_imagenet(args.robust)).eval()
-    if args.defense == 'random':
+    if nb_samples > 1:
         class_net = BalancedDataParallel(FIRST_GPU_BATCH, class_net)
 
     # Move networks to GPU
@@ -122,7 +126,6 @@ if __name__ == '__main__':
     adv_attack = IndirectPGD(classifier, 2, args.eps, eps_step, args.step, targeted=True, batch_size=NUM_SAMPLES_PROXY)
 
     # Load scale attack
-    nb_samples = NUM_SAMPLES_SAMPLE if args.defense == 'random' else 1
     scl_attack = ScaleAttack(scale_net, class_net, pooling, lr=args.lr, max_iter=args.iter, lam_inp=args.lam_inp,
                              nb_samples=nb_samples, early_stop=True)
 

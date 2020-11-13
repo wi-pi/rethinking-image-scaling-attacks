@@ -84,13 +84,11 @@ class ScaleAttack(object):
         Returns:
             np.ndarray containing predicted labels (multiple for n > 1).
         """
-        x = torch.tensor(x)
+        x = torch.tensor(x).cuda()
         with torch.no_grad():
             if pooling:
                 assert scale, 'Cannot apply pooling without scaling.'
-                x = x.to(self.pooling.dev)  # to the device recommended by pooling
-                x = self.pooling(x.repeat(n, 1, 1, 1))
-            x = x.cuda()
+                x = self.pooling(x, n)
             if scale:
                 x = self.scale_net(x)
             pred = self.class_net(x).argmax(1).cpu()
@@ -171,9 +169,7 @@ class ScaleAttack(object):
                 att_def = att
                 if adaptive:
                     if mode == 'sample':
-                        att_def = att_def.to(self.pooling.dev)
-                        att_def = att_def.repeat(self.nb_samples, 1, 1, 1)
-                        att_def = self.pooling(att_def).cuda()
+                        att_def = self.pooling(att_def, self.nb_samples)
                         if include_self:
                             att_def = torch.cat([att_def, att])  # include unpooling as well
                     elif mode == 'average':
@@ -286,9 +282,7 @@ class ScaleAttack(object):
                 # Get defensed image (big)
                 if i % 20 == 0:
                     self.pooling.cache = None
-                att_def = att.to(self.pooling.dev)
-                att_def = att_def.repeat(self.nb_samples, 1, 1, 1)
-                att_def = self.pooling(att_def, reuse=False).cuda()
+                att_def = self.pooling(att, n=self.nb_samples, reuse=False)
 
                 # Get scaled image (small)
                 inp = self.scale_net(att_def)

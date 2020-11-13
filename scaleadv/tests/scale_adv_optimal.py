@@ -2,9 +2,17 @@
 This module implements test APIs for Scale-Adv Attack (L2) based on off-the-shelf adv attacks.
 
 Notes:
-    1. Adv-attack on large image may require more steps, like PGD-100.
-"""
+    1. Adv-attack on large image may require more steps/budges, like PGD-100 and eps * sqrt(scale-ratio).
+    2. `average` is fast, but may not work for random-defense, unless the budget has equal PSNR.
+    3. `random` is slow, but can bypass random-defense even if the budget is eps * 2.
+    4. `laplace` is laplacian distribution centered at `average`, it can compensate (a little) its issue, with more steps.
 
+Empirical good settings:
+    1. 4 * 40 / 30 eps_step with 300 steps
+
+Todo:
+    1. Estimate std-dev of `laplace` dynamically from given input.
+"""
 from scaleadv.models.scaling import FullScaleNet
 from scaleadv.models.utils import AverageGradientClassifier, ReducedCrossEntropyLoss
 from scaleadv.tests.scale_adv import *
@@ -50,14 +58,16 @@ if __name__ == '__main__':
     # Load pooling
     # TODO: Support non-square pooling
     pooling = NonePool2d()
-    pooling_args = (sr_h * 2 - 1, 1, sr_h - 1, mask)
+    k = sr_h * 2 - 1
+    pooling_args = (k, 1, k // 2, mask)
+    nb_samples = NUM_SAMPLES_SAMPLE if args.defense in ['random', 'laplace'] else 1
     if args.defense:
         pooling = POOLING[args.defense](*pooling_args)
 
     # Load networks
     scale_net = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval()
     class_net = nn.Sequential(NormalizationLayer.from_preset('imagenet'), resnet50_imagenet(args.robust)).eval()
-    if args.defense == 'random':
+    if nb_samples > 1:
         class_net = BalancedDataParallel(FIRST_GPU_BATCH, class_net)
 
     # Move networks to GPU
@@ -73,14 +83,14 @@ if __name__ == '__main__':
     adv = adv_attack.generate(x=src_inp, y=y_target, proxy=None)
 
     # Adv-Attack on src
-    full_net = FullScaleNet(scale_net, class_net, pooling, n=NUM_SAMPLES_PROXY)
+    full_net = FullScaleNet(scale_net, class_net, pooling, n=1)
     y_src = classifier.predict(src_inp).argmax(1).item()
-    new_args = dict(nb_samples=NUM_SAMPLES_SAMPLE, verbose=True, y_cmp=[y_src, args.target])
+    new_args = dict(nb_samples=nb_samples, verbose=True, y_cmp=[y_src, args.target])
     classifier = AverageGradientClassifier(full_net, ReducedCrossEntropyLoss(), tuple(src.shape[1:]), NUM_CLASSES,
                                            **new_args, clip_values=(0, 1))
     eps = args.eps * 2
-    eps_step = 3 * eps / args.step
-    adv_attack = IndirectPGD(classifier, 2, eps, eps_step, args.step * 3, targeted=True, batch_size=NUM_SAMPLES_PROXY)
+    eps_step = 4 * eps / args.step
+    adv_attack = IndirectPGD(classifier, 2, eps, eps_step, args.step * 10, targeted=True, batch_size=NUM_SAMPLES_PROXY)
     att = adv_attack.generate(x=src, y=y_target, proxy=None)
 
     # Test
