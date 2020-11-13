@@ -12,7 +12,7 @@ from tqdm import tqdm
 from scaleadv.datasets.imagenet import IMAGENET_MEAN, IMAGENET_STD
 from scaleadv.datasets.utils import ImageFilesDataset
 from scaleadv.models.layers import NormalizationLayer
-from scaleadv.tests.gen_adv_pgd import get_model
+from scaleadv.depreciated.gen_adv_pgd import get_model
 
 OUTPUT_PATH = 'static/results/imagenet-600'
 MODEL_PATH = {
