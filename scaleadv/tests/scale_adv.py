@@ -9,6 +9,9 @@ Empirically good settings for reference:
     1. CW: confidence=3.0, binary_search_steps=20, max_iter=20
     2. Random w/o proxy: lr=0.1, lam_inp=200, max_iter=120
     3. Random w/ proxy: lr=0.05, lam_inp=40, max_iter=200
+
+Scale for images:
+    1. 5000: 3*224(0.12), 5x224()
 """
 from argparse import ArgumentParser
 
@@ -55,7 +58,7 @@ INPUT_SHAPE_PIL = (224, 224, 3)
 INPUT_SHAPE_NP = (3, 224, 224)
 FIRST_GPU_BATCH = 16
 NUM_SAMPLES_PROXY = 300  # for noisy proxy of adv-attack
-NUM_SAMPLES_SAMPLE = 200  # for monte carlo sampling of scale-attack
+NUM_SAMPLES_SAMPLE = 64  # for monte carlo sampling of scale-attack
 
 if __name__ == '__main__':
     p = ArgumentParser()
@@ -74,6 +77,7 @@ if __name__ == '__main__':
     # Scaling attack args
     p.add_argument('--lr', default=0.01, type=float, help='learning rate for scaling attack')
     p.add_argument('--lam-inp', default=1, type=int, help='lambda for L2 penalty at the input space')
+    p.add_argument('--lam-ce', default=2, type=int, help='lambda for CE penalty')
     p.add_argument('--iter', default=200, type=int, help='max iterations of Scaling attack')
     p.add_argument('--defense', default=None, type=str, choices=POOLING.keys(), help='type of defense')
     p.add_argument('--mode', default='none', type=str, choices=ADAPTIVE_MODE, help='adaptive attack mode')
@@ -109,11 +113,6 @@ if __name__ == '__main__':
     nb_samples = NUM_SAMPLES_SAMPLE if args.defense in ['random', 'laplace'] else 1
     if args.defense:
         pooling = POOLING[args.defense](*pooling_args)
-    if args.defense == 'laplace':
-        rnd = RandomPool2d(*pooling_args)
-        std = mask_std(src, rnd)
-        pooling.update_dist(scale=std)
-        print('Estimate std:', f'{std:.3f}')
 
     # Load networks
     scale_net = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval()
@@ -145,7 +144,7 @@ if __name__ == '__main__':
 
     # Scale attack based on args.mode
     if args.mode == 'optimal':
-        att = scl_attack.generate_optimal(src=src, target=args.target)
+        att = scl_attack.generate_optimal(src=src, target=args.target, lam_ce=args.lam_ce)
     else:
         adaptive = args.mode != 'none'
         att = scl_attack.generate(src=src, tgt=adv, adaptive=adaptive, mode=args.mode, test_freq=0, include_self=False)

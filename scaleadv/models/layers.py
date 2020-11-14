@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch.distributions.laplace import Laplace
 from torch.nn.modules.utils import _pair, _quadruple
 
+from scaleadv.attacks.utils import mask_std
 from scaleadv.datasets.imagenet import IMAGENET_STD, IMAGENET_MEAN
 
 
@@ -102,10 +103,8 @@ class LaplacianPool2d(Pool2d):
     def __init__(self, *args, avg=True):
         super(LaplacianPool2d, self).__init__(*args)
         self.avg = AveragePool2d(*args) if avg is True else None
+        self.rnd = RandomPool2d(*args)
         self.noise = None
-
-    def update_dist(self, loc=0, scale=0.1):
-        self.dist = Laplace(loc, scale)
 
     def forward(self, x: torch.Tensor, n: int = 1, *args, **kwargs):
         if self.avg is not None:
@@ -117,6 +116,15 @@ class LaplacianPool2d(Pool2d):
             self.noise = self.dist.sample(x.shape).to(self.dev)
         x = torch.clamp(x + self.noise, 0, 1)
         return x
+
+    def fresh_dist(self, x: torch.Tensor):
+        std = mask_std(x.detach().cpu().numpy(), self.rnd) * 1.25
+        print('Update std:', f'{std:.5f}')
+        self.update_dist(scale=std)
+
+    def update_dist(self, loc=0, scale=0.1):
+        self.dist = Laplace(loc, scale)
+        self.noise = None
 
 
 class MedianPool2d(Pool2d):

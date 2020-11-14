@@ -2,6 +2,7 @@ from collections import OrderedDict
 from typing import Optional
 
 import numpy as np
+import piq
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as F
@@ -9,7 +10,7 @@ from art.config import ART_NUMPY_DTYPE
 from torch.autograd import Variable
 from tqdm import trange
 
-from scaleadv.models.layers import Pool2d
+from scaleadv.models.layers import Pool2d, LaplacianPool2d
 from scaleadv.models.scaling import ScaleNet
 
 EARLY_STOP_ITER = 200
@@ -227,20 +228,21 @@ class ScaleAttack(object):
             self,
             src: np.ndarray,
             target: int,
+            lam_ce: int = 2,
     ) -> np.ndarray:
         """Run scale-attack on the entire pipeline with (optional) given pooling result.
 
         Args:
             src: large source image, of shape [1, 3, H, W].
             target: targeted class number.
+            lam_ce: weight for CE loss.
 
         Returns:
             np.ndarray: generated large attack image.
 
         Todo:
-            1. lam_ce is now using hard-coded value.
-            2. Add other regularization like Shadow Attack.
-            3. Save best-adv like `generate`.
+            1. Add other regularization like Shadow Attack.
+            2. Save best-adv like `generate`.
         """
         # Check params
         assert src.ndim == 4 and src.shape[0] == 1 and src.shape[1] == 3
@@ -267,9 +269,10 @@ class ScaleAttack(object):
                 att = self.tanh_to_img(var)
 
                 # Get defensed image (big)
-                if i % 20 == 0:
-                    self.pooling.cache = None
-                att_def = self.pooling(att, n=self.nb_samples, reuse=False)
+                if i % 50 == 0:
+                    if isinstance(self.pooling, LaplacianPool2d):
+                        self.pooling.fresh_dist(att)
+                att_def = self.pooling(att, n=self.nb_samples)
 
                 # Get scaled image (small)
                 inp = self.scale_net(att_def)
@@ -280,9 +283,10 @@ class ScaleAttack(object):
 
                 # Compute loss
                 loss = OrderedDict()
-                loss['BIG'] = (src - att).reshape(att.shape[0], -1).norm(2, dim=1).mean()
+                # loss['BIG'] = (src - att).reshape(att.shape[0], -1).norm(2, dim=1).mean()
+                loss['PSNR'] = piq.psnr(src, att)
                 loss['CE'] = nn.functional.cross_entropy(pred, y_tgt, reduction='mean')
-                total_loss = loss['BIG'] + 5 * loss['CE']
+                total_loss = 80 - loss['PSNR'] + lam_ce * loss['CE']
 
                 # Optimize
                 optimizer.zero_grad()
