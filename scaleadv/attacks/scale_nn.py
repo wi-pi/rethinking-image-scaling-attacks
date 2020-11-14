@@ -104,6 +104,7 @@ class ScaleAttack(object):
             mode: str = 'sample',
             test_freq: int = 0,
             include_self: bool = False,
+            y_tgt: int = None,
     ) -> np.ndarray:
         """Run scale-attack with given source and target images.
 
@@ -114,6 +115,7 @@ class ScaleAttack(object):
             mode: how to approximate the random pooling, only 'sample' and 'worst' supported now.
             test_freq: full test per `test` iterations, set 0 to disable it.
             include_self: True if you want the attack image is adversarial without pooling.
+            y_tgt: target label
 
         Returns:
             np.ndarray: final large attack image
@@ -142,7 +144,8 @@ class ScaleAttack(object):
 
         # Get predicted labels
         y_src = self.predict(src, scale=True).item()
-        y_tgt = self.predict(tgt, scale=False).item()
+        if y_tgt is None:
+            y_tgt = self.predict(tgt, scale=False).item()
 
         # Prepare attack vars
         var = Variable(torch.zeros_like(src), requires_grad=True)
@@ -220,7 +223,8 @@ class ScaleAttack(object):
                     prev_loss = total_loss
 
         # Convert to numpy
-        att = best_att
+        if best_att is not None:
+            att = best_att
         att = np.array(att.detach().cpu(), dtype=ART_NUMPY_DTYPE)
         return att
 

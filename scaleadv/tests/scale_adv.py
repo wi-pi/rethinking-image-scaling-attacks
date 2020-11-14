@@ -26,7 +26,7 @@ from scaling.SuppScalingLibraries import SuppScalingLibraries
 from scaleadv.attacks.adv import IndirectPGD
 from scaleadv.attacks.proxy import NoiseProxy
 from scaleadv.attacks.scale_nn import ScaleAttack
-from scaleadv.attacks.utils import get_mask_from_cl_cr, mask_std
+from scaleadv.attacks.utils import get_mask_from_cl_cr
 from scaleadv.datasets.imagenet import IMAGENET_NUM_CLASSES
 from scaleadv.datasets.imagenet import create_dataset
 from scaleadv.models.layers import NonePool2d, AveragePool2d, LaplacianPool2d
@@ -147,8 +147,10 @@ if __name__ == '__main__':
         att = scl_attack.generate_optimal(src=src, target=args.target, lam_ce=args.lam_ce)
     else:
         adaptive = args.mode != 'none'
-        att = scl_attack.generate(src=src, tgt=adv, adaptive=adaptive, mode=args.mode, test_freq=0, include_self=False)
+        att = scl_attack.generate(src=src, tgt=adv, adaptive=adaptive, mode=args.mode, test_freq=0, include_self=False,
+                                  y_tgt=args.target)
 
     # Test
     e = Evaluator(scale_net, class_net, pooling_args)
-    e.eval(src, adv, att, summary=True, tag=f'{args.id}.{args.defense}.{args.mode}.eps{args.eps}', save='.')
+    e.eval(src, adv, att, summary=True, tag=f'{args.id}.{args.defense}.{args.mode}.eps{args.eps}', save='.',
+           y_adv=args.target)
