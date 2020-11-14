@@ -24,7 +24,8 @@ if __name__ == '__main__':
     # Load data
     dataset = create_dataset(transform=None)
     src, _ = dataset[args.id]
-    src = resize_to_224x(src)
+    src = resize_to_224x(src, square=True)
+    src.save(f'dist-{args.id}-img.png')
     src = np.array(src)
 
     # Load scaling
@@ -51,7 +52,7 @@ if __name__ == '__main__':
     print(f'std: {std:.5f}')
 
     # Plot
-    plt.figure()
+    plt.figure(constrained_layout=True)
     plt.plot(xs, hist / hist.sum())
     plt.title(f'RandomPool2d of ID-{args.id} (mean={mean:.3f}, std={std:.3f})')
     plt.savefig(f'dist-{args.id}.pdf')
