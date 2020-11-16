@@ -46,6 +46,7 @@ ALGO_TYPE = {k: getattr(SuppScalingAlgorithms, k.upper()) for k in ALGO}
 ROBUST_MODELS = ['2', 'inf']
 ADAPTIVE_MODE = ['none', 'sample', 'worst', 'optimal']
 POOLING = {
+    'none': NonePool2d,
     'median': MedianPool2d,
     'random': RandomPool2d,
     'average': AveragePool2d,
