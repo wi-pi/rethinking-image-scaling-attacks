@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.distributions.laplace import Laplace
 from torch.nn.modules.utils import _pair, _quadruple
 
-from scaleadv.attacks.utils import mask_std
+from scaleadv.attacks.utils import mask_mad
 from scaleadv.datasets.imagenet import IMAGENET_STD, IMAGENET_MEAN
 
 
@@ -117,12 +117,12 @@ class LaplacianPool2d(Pool2d):
         x = torch.clamp(x + self.noise, 0, 1)
         return x
 
-    def fresh_dist(self, x: torch.Tensor):
-        std = mask_std(x.detach().cpu().numpy(), self.rnd) * 1.25
-        print('Update std:', f'{std:.5f}')
-        self.update_dist(scale=std)
+    def fresh_dist(self, x: torch.Tensor, lam: float = 1.0):
+        mad = mask_mad(x.detach().cpu().numpy(), self.rnd) * lam
+        self.update_dist(scale=mad)
 
     def update_dist(self, loc=0, scale=0.1):
+        print(f'Update dist: loc={loc:.3f}, scale={scale:.3f}')
         self.dist = Laplace(loc, scale)
         self.noise = None
 

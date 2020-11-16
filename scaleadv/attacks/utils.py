@@ -19,11 +19,9 @@ def _mask_diff(x: np.ndarray, pooling: "RandomPool2d", n: int):
     return diff
 
 
-def mask_std(x: np.ndarray, pooling: "RandomPool2d", n=100):
+def mask_mad(x: np.ndarray, pooling: "RandomPool2d", n=100):
     assert x.ndim == 4 and x.shape[0] == 1
-    return _mask_diff(x, pooling, n).std().cpu().item()
-    # Notice that Lap's scale is actually x.abs().mean()
-    # return _mask_diff(x, pooling, n).abs().mean().cpu().item()
+    return _mask_diff(x, pooling, n).abs().mean().cpu().item()
 
 
 def mask_hist(x: np.ndarray, pooling: "RandomPool2d", n: int = 100, bins: int = 100, min: int = -1, max: int = 1):

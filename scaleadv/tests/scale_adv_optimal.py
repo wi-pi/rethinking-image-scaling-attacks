@@ -10,7 +10,7 @@ Notes:
 Empirical good settings:
     1. 4 * 40 / 30 eps_step with 300 steps
 """
-from scaleadv.attacks.utils import mask_std
+from scaleadv.attacks.utils import mask_mad
 from scaleadv.models.scaling import FullScaleNet
 from scaleadv.models.utils import AverageGradientClassifier, ReducedCrossEntropyLoss
 from scaleadv.tests.scale_adv import *
@@ -65,9 +65,8 @@ if __name__ == '__main__':
         pooling = POOLING[args.defense](*pooling_args)
     if args.defense == 'laplace':
         rnd = RandomPool2d(*pooling_args)
-        std = mask_std(src, rnd)
-        pooling.update_dist(scale=std)
-        print('Estimate std:', f'{std:.3f}')
+        mad = mask_mad(src, rnd) * 1.0
+        pooling.update_dist(scale=mad)
 
     # Load networks
     scale_net = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval()
