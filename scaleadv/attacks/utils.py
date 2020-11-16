@@ -1,6 +1,9 @@
+from typing import Union
+
 import numpy as np
 import numpy.linalg as LA
 import torch
+import torch.nn.functional as F
 
 
 def get_mask_from_cl_cr(cl: np.ndarray, cr: np.ndarray) -> np.ndarray:
@@ -19,11 +22,9 @@ def _mask_diff(x: np.ndarray, pooling: "RandomPool2d", n: int):
     return diff
 
 
-def mask_std(x: np.ndarray, pooling: "RandomPool2d", n=100):
+def mask_mad(x: np.ndarray, pooling: "RandomPool2d", n=100):
     assert x.ndim == 4 and x.shape[0] == 1
-    return _mask_diff(x, pooling, n).std().cpu().item()
-    # Notice that Lap's scale is actually x.abs().mean()
-    # return _mask_diff(x, pooling, n).abs().mean().cpu().item()
+    return _mask_diff(x, pooling, n).abs().mean().cpu().item()
 
 
 def mask_hist(x: np.ndarray, pooling: "RandomPool2d", n: int = 100, bins: int = 100, min: int = -1, max: int = 1):
@@ -31,4 +32,13 @@ def mask_hist(x: np.ndarray, pooling: "RandomPool2d", n: int = 100, bins: int = 
     diff = _mask_diff(x, pooling, n)
     hist = torch.histc(diff, bins=bins, min=min, max=max).numpy()
     xs = np.arange(min, max, (max - min) / bins)
-    return xs, hist, diff.mean().item(), diff.std().item()
+    return xs, hist, diff.cpu().numpy()
+
+
+def estimate_mad(x: Union[np.ndarray, torch.Tensor], k: int):
+    x = torch.as_tensor(x, dtype=torch.float32)
+    y = F.pad(x, [k // 2] * 4, mode='reflect')
+    y = y.unfold(2, k, 1).unfold(3, k, 1)
+    d = y - x[..., None, None]
+    mad = d.abs().mean().cpu().item()
+    return mad

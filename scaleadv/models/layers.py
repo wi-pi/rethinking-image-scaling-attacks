@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.distributions.laplace import Laplace
 from torch.nn.modules.utils import _pair, _quadruple
 
-from scaleadv.attacks.utils import mask_std
+from scaleadv.attacks.utils import mask_mad, estimate_mad
 from scaleadv.datasets.imagenet import IMAGENET_STD, IMAGENET_MEAN
 
 
@@ -97,13 +97,32 @@ class AveragePool2d(Pool2d):
         return x
 
 
+class CheapRandomPool2d(Pool2d):
+
+    def __init__(self, *args, avg=True):
+        super(CheapRandomPool2d, self).__init__(*args)
+        self.avg = AveragePool2d(*args) if avg else None
+        self.rnd = RandomPool2d(*args)
+        self.noise = None
+
+    def forward(self, x: torch.Tensor, n: int = 1, *args, **kwargs):
+        if self.avg is not None:
+            x = self.avg(x)
+        return super(CheapRandomPool2d, self).forward(x, n)
+
+    def _pool(self, x: torch.Tensor, *args, **kwargs):
+        if self.noise is None or self.noise.shape[0] != x.shape[0]:
+            self.noise = self.rnd(x).data - x.data
+        x = torch.clamp(x + self.noise, 0, 1)
+        return x
+
+
 class LaplacianPool2d(Pool2d):
     dist = Laplace(loc=0, scale=0.1)
 
     def __init__(self, *args, avg=True):
         super(LaplacianPool2d, self).__init__(*args)
         self.avg = AveragePool2d(*args) if avg is True else None
-        self.rnd = RandomPool2d(*args)
         self.noise = None
 
     def forward(self, x: torch.Tensor, n: int = 1, *args, **kwargs):
@@ -117,12 +136,12 @@ class LaplacianPool2d(Pool2d):
         x = torch.clamp(x + self.noise, 0, 1)
         return x
 
-    def fresh_dist(self, x: torch.Tensor):
-        std = mask_std(x.detach().cpu().numpy(), self.rnd) * 1.25
-        print('Update std:', f'{std:.5f}')
-        self.update_dist(scale=std)
+    def fresh_dist(self, x: torch.Tensor, lam: float = 1.0):
+        mad = estimate_mad(x, self.kernel_size[0]) * lam
+        self.update_dist(scale=mad)
 
     def update_dist(self, loc=0, scale=0.1):
+        print(f'Update dist: loc={loc:.3f}, scale={scale:.3f}')
         self.dist = Laplace(loc, scale)
         self.noise = None
 

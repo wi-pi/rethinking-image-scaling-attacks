@@ -16,10 +16,12 @@ from scaleadv.models.layers import MedianPool2d, RandomPool2d
 from scaleadv.models.scaling import ScaleNet
 
 
-def resize_to_224x(img: Image.Image, more: int = 1):
+def resize_to_224x(img: Image.Image, more: int = 1, square: bool = False):
     w, h = img.size
     w = 224 * max(ceil(w / 224), more)
     h = 224 * max(ceil(h / 224), more)
+    if square:
+        w = h = min(w, h)
     return img.resize((w, h))
 
 
@@ -100,7 +102,8 @@ class Evaluator(object):
             att: np.ndarray,
             summary: bool = False,
             tag: str = '',
-            save: str = ''
+            save: str = '',
+            y_adv: int = None
     ):
         # Check params & to tensors
         src = self._check(src).cuda()
@@ -115,7 +118,8 @@ class Evaluator(object):
 
         # Compute labels
         y_src = self.predict(src_inp, scale=False, pooling=None).item()
-        y_adv = self.predict(adv_inp, scale=False, pooling=None).item()
+        if y_adv is None:
+            y_adv = self.predict(adv_inp, scale=False, pooling=None).item()
 
         # Evaluation
         stats = OrderedDict({
@@ -129,7 +133,7 @@ class Evaluator(object):
             print(self.summary(stats, y_src, y_adv, tag))
 
         if save:
-            self.save_images(src, tag=f'{tag}.SRC', root=save)
+            # self.save_images(src, tag=f'{tag}.SRC', root=save)
             self.save_images(att, tag=f'{tag}.ATT', root=save)
             F.to_pil_image(adv_inp.cpu()[0]).save(f'{save}/{tag}.ADV.inp.png')
             F.to_pil_image(adv_big.cpu()[0]).save(f'{save}/{tag}.ADV.big.png')

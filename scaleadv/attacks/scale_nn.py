@@ -104,6 +104,7 @@ class ScaleAttack(object):
             mode: str = 'sample',
             test_freq: int = 0,
             include_self: bool = False,
+            y_tgt: int = None,
     ) -> np.ndarray:
         """Run scale-attack with given source and target images.
 
@@ -114,6 +115,7 @@ class ScaleAttack(object):
             mode: how to approximate the random pooling, only 'sample' and 'worst' supported now.
             test_freq: full test per `test` iterations, set 0 to disable it.
             include_self: True if you want the attack image is adversarial without pooling.
+            y_tgt: target label
 
         Returns:
             np.ndarray: final large attack image
@@ -121,6 +123,8 @@ class ScaleAttack(object):
         Notes:
             1. 'worst' returns the worst result by up-sampling with linear interpolation.
                this solves both median and random defenses with "2\beta" kernel width.
+            2. I temporarily commented out the trick that directs optimization via predictions,
+               Because this trick will have attack that hides eps40 ends up hiding eps20.
         """
         # Check params
         for x in [src, tgt]:
@@ -142,7 +146,8 @@ class ScaleAttack(object):
 
         # Get predicted labels
         y_src = self.predict(src, scale=True).item()
-        y_tgt = self.predict(tgt, scale=False).item()
+        if y_tgt is None:
+            y_tgt = self.predict(tgt, scale=False).item()
 
         # Prepare attack vars
         var = Variable(torch.zeros_like(src), requires_grad=True)
@@ -198,12 +203,12 @@ class ScaleAttack(object):
                 pbar.set_postfix(stats)
 
                 # Update direction according to predictions
-                if np.mean(pred == y_tgt) > 0.95:
-                    lam_inp = 1
-                    if loss['BIG'] < best_att_l2:
-                        best_att, best_att_l2 = att.detach().clone(), loss['BIG']
-                else:
-                    lam_inp = self.lam_inp
+                # if np.mean(pred == y_tgt) > 0.95:
+                #     lam_inp = 1
+                #     if loss['BIG'] < best_att_l2:
+                #         best_att, best_att_l2 = att.detach().clone(), loss['BIG']
+                # else:
+                #     lam_inp = self.lam_inp
 
                 # Test
                 if test_freq and i % test_freq == 0:
@@ -220,7 +225,8 @@ class ScaleAttack(object):
                     prev_loss = total_loss
 
         # Convert to numpy
-        att = best_att
+        if best_att is not None:
+            att = best_att
         att = np.array(att.detach().cpu(), dtype=ART_NUMPY_DTYPE)
         return att
 
@@ -229,6 +235,7 @@ class ScaleAttack(object):
             src: np.ndarray,
             target: int,
             lam_ce: int = 2,
+            update_noise: int = 0,
     ) -> np.ndarray:
         """Run scale-attack on the entire pipeline with (optional) given pooling result.
 
@@ -236,6 +243,7 @@ class ScaleAttack(object):
             src: large source image, of shape [1, 3, H, W].
             target: targeted class number.
             lam_ce: weight for CE loss.
+            update_noise: recompute std for certain iterations, set 0 to disable it.
 
         Returns:
             np.ndarray: generated large attack image.
@@ -269,7 +277,7 @@ class ScaleAttack(object):
                 att = self.tanh_to_img(var)
 
                 # Get defensed image (big)
-                if i % 50 == 0:
+                if update_noise and i % update_noise == 0:
                     if isinstance(self.pooling, LaplacianPool2d):
                         self.pooling.fresh_dist(att)
                 att_def = self.pooling(att, n=self.nb_samples)
