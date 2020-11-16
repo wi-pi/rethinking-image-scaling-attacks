@@ -153,11 +153,10 @@ if __name__ == '__main__':
     class_net = nn.Sequential(NormalizationLayer.from_preset('imagenet'), resnet50_imagenet(args.robust)).eval()
 
     # Other params
-    eps = list(range(1, 51, 1))
-    # eps = list(range(5, 51, 5))
+    eps = list(range(5, 51, 5))
     lib = 'cv'
     algo_list = ['linear', 'area']
-    defense_list = ['none', 'median', 'random']
+    defense_list = ['none', 'median', 'cheap']
     color = 'o- o--'.split()
     marker = 'C2 C0 C1'.split()
 

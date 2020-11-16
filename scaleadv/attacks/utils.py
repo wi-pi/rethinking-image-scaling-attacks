@@ -1,6 +1,9 @@
+from typing import Union
+
 import numpy as np
 import numpy.linalg as LA
 import torch
+import torch.nn.functional as F
 
 
 def get_mask_from_cl_cr(cl: np.ndarray, cr: np.ndarray) -> np.ndarray:
@@ -29,4 +32,13 @@ def mask_hist(x: np.ndarray, pooling: "RandomPool2d", n: int = 100, bins: int = 
     diff = _mask_diff(x, pooling, n)
     hist = torch.histc(diff, bins=bins, min=min, max=max).numpy()
     xs = np.arange(min, max, (max - min) / bins)
-    return xs, hist, diff.mean().item(), diff.std().item()
+    return xs, hist, diff.cpu().numpy()
+
+
+def estimate_mad(x: Union[np.ndarray, torch.Tensor], k: int):
+    x = torch.as_tensor(x, dtype=torch.float32)
+    y = F.pad(x, [k // 2] * 4, mode='reflect')
+    y = y.unfold(2, k, 1).unfold(3, k, 1)
+    d = y - x[..., None, None]
+    mad = d.abs().mean().cpu().item()
+    return mad
