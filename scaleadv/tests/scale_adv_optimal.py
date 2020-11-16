@@ -10,6 +10,7 @@ Notes:
 Empirical good settings:
     1. 4 * 40 / 30 eps_step with 300 steps
 """
+from scaleadv.attacks.utils import mask_std
 from scaleadv.models.scaling import FullScaleNet
 from scaleadv.models.utils import AverageGradientClassifier, ReducedCrossEntropyLoss
 from scaleadv.tests.scale_adv import *
@@ -26,7 +27,9 @@ if __name__ == '__main__':
     p.add_argument('--bigger', default=1, type=int, help='scale up the source image')
     # Adversarial attack args
     p.add_argument('--eps', default=20, type=float, help='L2 perturbation of adv-example')
+    p.add_argument('--big-eps', default=60, type=float, help='L2 perturbation of attack image')
     p.add_argument('--step', default=30, type=int, help='max iterations of PGD attack')
+    p.add_argument('--big-step', default=30, type=int, help='max iterations of Scale-Adv')
     p.add_argument('--adv-proxy', action='store_true', help='do adv-attack on noisy proxy')
     # Scaling attack args
     p.add_argument('--defense', default=None, type=str, choices=POOLING.keys(), help='type of defense')
@@ -35,7 +38,7 @@ if __name__ == '__main__':
     # Load data
     dataset = create_dataset(transform=None)
     src, _ = dataset[args.id]
-    src = resize_to_224x(src, more=args.bigger)
+    src = resize_to_224x(src, more=args.bigger, square=True)
     src = np.array(src)
 
     # Load scaling
@@ -90,9 +93,9 @@ if __name__ == '__main__':
     new_args = dict(nb_samples=nb_samples, verbose=True, y_cmp=[y_src, args.target])
     classifier = AverageGradientClassifier(full_net, ReducedCrossEntropyLoss(), tuple(src.shape[1:]), NUM_CLASSES,
                                            **new_args, clip_values=(0, 1))
-    eps = args.eps * 2
+    eps = args.big_eps
     eps_step = 4 * eps / args.step
-    adv_attack = IndirectPGD(classifier, 2, eps, eps_step, args.step * 10, targeted=True, batch_size=NUM_SAMPLES_PROXY)
+    adv_attack = IndirectPGD(classifier, 2, eps, eps_step, args.big_step, targeted=True, batch_size=NUM_SAMPLES_PROXY)
     att = adv_attack.generate(x=src, y=y_target, proxy=None)
 
     # Test

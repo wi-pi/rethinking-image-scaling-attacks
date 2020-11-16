@@ -123,6 +123,8 @@ class ScaleAttack(object):
         Notes:
             1. 'worst' returns the worst result by up-sampling with linear interpolation.
                this solves both median and random defenses with "2\beta" kernel width.
+            2. I temporarily commented out the trick that directs optimization via predictions,
+               Because this trick will have attack that hides eps40 ends up hiding eps20.
         """
         # Check params
         for x in [src, tgt]:
@@ -201,12 +203,12 @@ class ScaleAttack(object):
                 pbar.set_postfix(stats)
 
                 # Update direction according to predictions
-                if np.mean(pred == y_tgt) > 0.95:
-                    lam_inp = 1
-                    if loss['BIG'] < best_att_l2:
-                        best_att, best_att_l2 = att.detach().clone(), loss['BIG']
-                else:
-                    lam_inp = self.lam_inp
+                # if np.mean(pred == y_tgt) > 0.95:
+                #     lam_inp = 1
+                #     if loss['BIG'] < best_att_l2:
+                #         best_att, best_att_l2 = att.detach().clone(), loss['BIG']
+                # else:
+                #     lam_inp = self.lam_inp
 
                 # Test
                 if test_freq and i % test_freq == 0:
@@ -233,6 +235,7 @@ class ScaleAttack(object):
             src: np.ndarray,
             target: int,
             lam_ce: int = 2,
+            update_noise: int = 0,
     ) -> np.ndarray:
         """Run scale-attack on the entire pipeline with (optional) given pooling result.
 
@@ -240,6 +243,7 @@ class ScaleAttack(object):
             src: large source image, of shape [1, 3, H, W].
             target: targeted class number.
             lam_ce: weight for CE loss.
+            update_noise: recompute std for certain iterations, set 0 to disable it.
 
         Returns:
             np.ndarray: generated large attack image.
@@ -273,7 +277,7 @@ class ScaleAttack(object):
                 att = self.tanh_to_img(var)
 
                 # Get defensed image (big)
-                if i % 50 == 0:
+                if update_noise and i % update_noise == 0:
                     if isinstance(self.pooling, LaplacianPool2d):
                         self.pooling.fresh_dist(att)
                 att_def = self.pooling(att, n=self.nb_samples)
