@@ -2,6 +2,3 @@
 	path = ext/scalingattack
 	url = git@github.com:EQuiw/2019-scalingattack.git
     ignore = dirty
-[submodule "ext/shadow"]
-	path = ext/shadow
-	url = git@github.com:AminJun/BreakingCertifiableDefenses.git
