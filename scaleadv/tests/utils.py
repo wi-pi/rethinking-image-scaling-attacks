@@ -121,12 +121,20 @@ class Evaluator(object):
         if y_adv is None:
             y_adv = self.predict(adv_inp, scale=False, pooling=None).item()
 
+        # Compute adv from att
+        att_non_inp = self.scale_net(att)
+        att_med_inp = self.scale_net(self.pooling_med(att, 1))
+        att_rnd_inp = self.scale_net(self.pooling_rnd(att, 1))
+
         # Evaluation
         stats = OrderedDict({
             'SRC': self.eval_one(ref=src_big, x=src_big, scale=True),
             'ADV': self.eval_one(ref=src_inp, x=adv_inp, scale=False),
             'BASE': self.eval_one(ref=src_big, x=adv_big, scale=True),
-            'ATT': self.eval_one(ref=src_big, x=att, scale=True)
+            'ATT': self.eval_one(ref=src_big, x=att, scale=True),
+            'ATT-INP-NON': self.eval_one(ref=src_inp, x=att_non_inp, scale=False),
+            'ATT-INP-MED': self.eval_one(ref=src_inp, x=att_med_inp, scale=False),
+            'ATT-INP-RND': self.eval_one(ref=src_inp, x=att_rnd_inp, scale=False),
         })
 
         if summary:
