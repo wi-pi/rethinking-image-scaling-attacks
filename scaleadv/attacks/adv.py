@@ -43,6 +43,7 @@ class IndirectPGD(ProjectedGradientDescentPyTorch):
         Returns:
             An array holding the adversarial example.
         """
+        self.estimator.cnt = 0
         if proxy is None:
             return super(IndirectPGD, self).generate(x, y)
         if x.shape[0] != 1:

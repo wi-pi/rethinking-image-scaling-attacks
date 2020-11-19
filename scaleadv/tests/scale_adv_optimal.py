@@ -98,4 +98,5 @@ if __name__ == '__main__':
 
     # Test
     e = Evaluator(scale_net, class_net, pooling_args)
-    e.eval(src, adv, att, summary=True, tag=f'{args.id}.{args.defense}.optimal.eps{args.eps}', save='.')
+    e.eval(src, adv, att, summary=True, tag=f'{args.id}.{args.defense}.optimal.eps{args.eps}', save='.',
+           y_adv=args.target)

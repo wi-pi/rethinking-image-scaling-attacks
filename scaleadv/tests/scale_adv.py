@@ -32,7 +32,7 @@ from scaleadv.datasets.imagenet import create_dataset
 from scaleadv.models.layers import NonePool2d, AveragePool2d, LaplacianPool2d, CheapRandomPool2d
 from scaleadv.models.layers import NormalizationLayer, MedianPool2d, RandomPool2d
 from scaleadv.models.parallel import BalancedDataParallel
-from scaleadv.models.resnet import resnet50_imagenet
+from scaleadv.models.resnet import resnet50_imagenet, IMAGENET_MODEL_PATH
 from scaleadv.models.scaling import ScaleNet
 from scaleadv.tests.utils import resize_to_224x, Evaluator
 
@@ -43,7 +43,7 @@ LIB_TYPE = {k: getattr(SuppScalingLibraries, k.upper()) for k in LIB}
 ALGO_TYPE = {k: getattr(SuppScalingAlgorithms, k.upper()) for k in ALGO}
 
 # Scaling attack modes
-ROBUST_MODELS = ['2', 'inf']
+ROBUST_MODELS = IMAGENET_MODEL_PATH.keys()
 ADAPTIVE_MODE = ['none', 'sample', 'worst', 'optimal']
 POOLING = {
     'none': NonePool2d,
