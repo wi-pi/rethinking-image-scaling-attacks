@@ -17,15 +17,9 @@ class MetricCompare(object):
     NORM = 2
     STEP = 30
 
-    # Scale-Adv Params
-    # LR = 0.01
-    # ITER = 1000
-    # LAM_INP = 7
-
-    # Scale-Adv Params (random)
-    LR = 0.1
-    ITER = 120
-    LAM_INP = 100
+    # Scale-Adv params (lr, iter, lam_inp)
+    ARGS_COMMON = [0.01, 1000, 7]
+    ARGS_RANDOM = [0.1, 120, 100]
 
     # PIL array to batch array
     pil_to_batch = T.Compose([T.ToTensor(), lambda x: x.numpy()[None, ...]])
@@ -38,7 +32,20 @@ class MetricCompare(object):
         self.eps = eps
         self.tag = tag
 
-    def eval_lib_algo(self, lib: str, algo: str, defense: str = None, dump=True, load=False):
+    def eval_lib_algo(self, lib: str, algo: str, defense: str = 'none', mode: str = None, dump=True, load=False):
+        """Evaluate (lib, algo, defense) over adv-attack with several [eps] budgets
+
+        Args:
+            lib: scaling library
+            algo: scaling algorithm
+            defense: scaling defense
+            mode: mode to approximate random defense
+            dump: True to dump data
+            load: True to load data if existed
+
+        Returns:
+            List[Dict]: list of stats corresponding to [eps]
+        """
         fname = f'{self.tag}.{lib}.{algo}.{defense}.pkl'
         if load and os.path.exists(fname):
             return pickle.load(open(fname, 'rb'))
@@ -53,12 +60,10 @@ class MetricCompare(object):
         src, inp = map(self.pil_to_batch, [self.src, inp])
 
         # Get pooling layer
-        pooling = NonePool2d()
         kernel = src.shape[2] // inp.shape[2] * 2 - 1
         pooling_args = kernel, 1, kernel // 2, mask
-        nb_samples = NUM_SAMPLES_SAMPLE if defense in ['random', 'laplace'] else 1
-        if defense not in [None, 'none']:
-            pooling = POOLING[defense](*pooling_args)
+        pooling = POOLING[defense](*pooling_args)
+        nb_samples = 1 if mode is None else 200
 
         # Get networks
         scale_net = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval()
@@ -74,9 +79,9 @@ class MetricCompare(object):
                                        clip_values=(0, 1))
 
         # Load scaling attack
-        scl_attack = ScaleAttack(scale_net, class_net, pooling, lr=self.LR, max_iter=self.ITER, lam_inp=self.LAM_INP,
-                                 nb_samples=nb_samples, early_stop=True)
+        scl_attack = ScaleAttack(scale_net, class_net, pooling)
         e = Evaluator(scale_net, class_net, pooling_args)
+        lr, max_iter, lam_inp = self.ARGS_COMMON if mode is None else self.ARGS_RANDOM
 
         data = []
         for eps in self.eps:
@@ -86,20 +91,21 @@ class MetricCompare(object):
             adv = adv_attack.generate(inp, y)
 
             # Get att
-            adaptive = defense != 'none'
-            att = scl_attack.generate(src, adv, adaptive, 'sample', y_tgt=self.target)
+            att = scl_attack.hide(src, adv, lr=lr, step=max_iter, lam_inp=lam_inp, mode=mode, nb_samples=nb_samples,
+                                  tgt_label=self.target)
 
             # Test
-            stats = e.eval(src, adv, att, summary=True, tag=f'EVAL.{lib}.{algo}.{defense}.eps{eps}', save='.',
-                           y_adv=self.target)
+            stats = e.eval(src, adv, att, summary=True, y_adv=self.target,
+                           tag=f'{self.tag}.{lib}.{algo}.{defense}.eps{eps}',
+                           save='.')
             data.append(stats)
 
         if dump:
             pickle.dump(data, open(fname, 'wb'))
         return data
 
-    def plot_lib_algo(self, lib: str, algo: str, defense: str, marker: str):
-        data = self.eval_lib_algo(lib, algo, defense, dump=True, load=True)
+    def plot_lib_algo(self, lib: str, algo: str, defense: str, mode: str, marker: str):
+        data = self.eval_lib_algo(lib, algo, defense, mode, dump=True, load=True)
         y_label = {'none': 'Y', 'median': 'Y_MED'}.get(defense, 'Y_RND')
         x, y = [], []
         warning = []
@@ -126,28 +132,24 @@ if __name__ == '__main__':
     # Input args
     p.add_argument('--id', type=int, required=True, help='ID of test image')
     p.add_argument('--target', type=int, required=True, help='target label')
-    p.add_argument('--robust', default=None, type=str, choices=ROBUST_MODELS, help='use robust model, optional')
+    p.add_argument('--model', default=None, type=str, choices=ROBUST_MODELS, help='use robust model, optional')
     # Scaling args
-    p.add_argument('--bigger', default=1, type=int, help='scale up the source image')
+    p.add_argument('--scale', default=0, type=int, help='set a fixed scale ratio, 0 to use the original one')
     # Adversarial attack args
     p.add_argument('--eps', default=20, type=float, help='L2 perturbation of adv-example')
     p.add_argument('--step', default=30, type=int, help='max iterations of PGD attack')
     p.add_argument('--adv-proxy', action='store_true', help='do adv-attack on noisy proxy')
-    # Scaling attack args
+    # HIDE args
     p.add_argument('--lr', default=0.01, type=float, help='learning rate for scaling attack')
     p.add_argument('--lam-inp', default=1, type=int, help='lambda for L2 penalty at the input space')
-    p.add_argument('--lam-ce', default=2, type=int, help='lambda for CE penalty')
     p.add_argument('--iter', default=200, type=int, help='max iterations of Scaling attack')
-    p.add_argument('--defense', default=None, type=str, choices=POOLING.keys(), help='type of defense')
-    p.add_argument('--mode', default='none', type=str, choices=ADAPTIVE_MODE, help='adaptive attack mode')
     args = p.parse_args()
 
     # Load data
     dataset = create_dataset(transform=None)
     src, _ = dataset[args.id]
-    src = resize_to_224x(src, more=args.bigger)
+    src = resize_to_224x(src, scale=args.scale, square=True)
     src = np.array(src)
-    ratio = src.shape[0] // 224
 
     # Load networks
     class_net = nn.Sequential(NormalizationLayer.from_preset('imagenet'), resnet50_imagenet(args.robust)).eval()
@@ -155,8 +157,9 @@ if __name__ == '__main__':
     # Other params
     eps = list(range(5, 51, 5))
     lib = 'cv'
-    algo_list = ['linear', 'area']
-    defense_list = ['none', 'median', 'cheap']
+    algo_list = ['linear']
+    defense_list = ['none', 'median', 'random']
+    mode_list = [None, None, 'cheap']
     color = 'o- o--'.split()
     marker = 'C2 C0 C1'.split()
 
@@ -165,12 +168,12 @@ if __name__ == '__main__':
 
     # Test + Plot
     plt.figure(figsize=(5, 5), constrained_layout=True)
-    plt.title(f'Scale-Adv Attack')
+    plt.title(f'Scale-Adv Attack (Hide)')
     plt.xlabel('Adversarial Attack (L-2)')
-    plt.ylabel('Scale-Adv Attack (L-2)')
+    plt.ylabel('After Hiding (L-2)')
     for algo, c in zip(algo_list, color):
-        for defense, m in zip(defense_list, marker):
-            tester.plot_lib_algo(lib, algo, defense, marker=f'{m}{c}')
+        for defense, mode, m in zip(defense_list, mode_list, marker):
+            tester.plot_lib_algo(lib, algo, defense, mode, marker=f'{m}{c}')
 
     # Plot reference line
     eps[0] = 10
