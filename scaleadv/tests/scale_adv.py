@@ -25,14 +25,14 @@ from scaling.SuppScalingLibraries import SuppScalingLibraries
 
 from scaleadv.attacks.adv import IndirectPGD
 from scaleadv.attacks.proxy import NoiseProxy
-from scaleadv.attacks.scale_nn import ScaleAttack
+from scaleadv.attacks.scale_nn import ScaleAttack, RANDOM_APPROXIMATION
 from scaleadv.attacks.utils import get_mask_from_cl_cr
 from scaleadv.datasets.imagenet import IMAGENET_NUM_CLASSES
 from scaleadv.datasets.imagenet import create_dataset
-from scaleadv.models.layers import NonePool2d, AveragePool2d, LaplacianPool2d, CheapRandomPool2d
+from scaleadv.models.layers import NonePool2d
 from scaleadv.models.layers import NormalizationLayer, MedianPool2d, RandomPool2d
 from scaleadv.models.parallel import BalancedDataParallel
-from scaleadv.models.resnet import resnet50_imagenet
+from scaleadv.models.resnet import resnet50_imagenet, IMAGENET_MODEL_PATH
 from scaleadv.models.scaling import ScaleNet
 from scaleadv.tests.utils import resize_to_224x, Evaluator
 
@@ -43,15 +43,12 @@ LIB_TYPE = {k: getattr(SuppScalingLibraries, k.upper()) for k in LIB}
 ALGO_TYPE = {k: getattr(SuppScalingAlgorithms, k.upper()) for k in ALGO}
 
 # Scaling attack modes
-ROBUST_MODELS = ['2', 'inf']
-ADAPTIVE_MODE = ['none', 'sample', 'worst', 'optimal']
+ROBUST_MODELS = IMAGENET_MODEL_PATH.keys()
+ADAPTIVE_MODE = RANDOM_APPROXIMATION.keys()
 POOLING = {
     'none': NonePool2d,
     'median': MedianPool2d,
     'random': RandomPool2d,
-    'average': AveragePool2d,
-    'laplace': LaplacianPool2d,
-    'cheap': CheapRandomPool2d,
 }
 
 # Hard-coded arguments
@@ -67,30 +64,40 @@ if __name__ == '__main__':
     # Input args
     p.add_argument('--id', type=int, required=True, help='ID of test image')
     p.add_argument('--target', type=int, required=True, help='target label')
-    p.add_argument('--robust', default=None, type=str, choices=ROBUST_MODELS, help='use robust model, optional')
+    p.add_argument('--model', default=None, type=str, choices=ROBUST_MODELS, help='use robust model, optional')
     # Scaling args
     p.add_argument('--lib', default='cv', type=str, choices=LIB, help='scaling libraries')
     p.add_argument('--algo', default='linear', type=str, choices=ALGO, help='scaling algorithms')
-    p.add_argument('--bigger', default=1, type=int, help='scale up the source image')
+    p.add_argument('--scale', default=0, type=int, help='set a fixed scale ratio, 0 to use the original size')
     # Adversarial attack args
     p.add_argument('--eps', default=20, type=float, help='L2 perturbation of adv-example')
     p.add_argument('--step', default=30, type=int, help='max iterations of PGD attack')
     p.add_argument('--adv-proxy', action='store_true', help='do adv-attack on noisy proxy')
     # Scaling attack args
-    p.add_argument('--lr', default=0.01, type=float, help='learning rate for scaling attack')
-    p.add_argument('--lam-inp', default=1, type=int, help='lambda for L2 penalty at the input space')
-    p.add_argument('--lam-ce', default=2, type=int, help='lambda for CE penalty')
-    p.add_argument('--iter', default=200, type=int, help='max iterations of Scaling attack')
-    p.add_argument('--defense', default=None, type=str, choices=POOLING.keys(), help='type of defense')
-    p.add_argument('--mode', default='none', type=str, choices=ADAPTIVE_MODE, help='adaptive attack mode')
+    p.add_argument('--defense', default='none', type=str, choices=POOLING.keys(), help='type of defense')
+    p.add_argument('--mode', default=None, type=str, choices=ADAPTIVE_MODE, help='random pooling approximation mode')
+    p.add_argument('--samples', default=1, type=int, help='number of samples to approximate random pooling')
     # Misc args
-    p.add_argument('--tag', default='TEST', type=str, help='')
+    p.add_argument('--tag', default='TEST', type=str, help='prefix of names')
+
+    # Sub commands
+    sp = p.add_subparsers(dest='action')
+    # HIDE args
+    p_hide = sp.add_parser('hide', help='ScaleAdv - Hide')
+    p_hide.add_argument('--lr', default=0.01, type=float, help='learning rate for scaling attack')
+    p_hide.add_argument('--lam-inp', default=1, type=int, help='lambda for L2 penalty at the input space')
+    p_hide.add_argument('--iter', default=200, type=int, help='max iterations of Scaling attack')
+    # GENERATE args
+    p_gen = sp.add_parser('generate', help='ScaleAdv - Generate')
+    p_gen.add_argument('--big-eps', default=40, type=float, help='L2 perturbation of attack image')
+    p_gen.add_argument('--big-sig', default=4.0, type=float, help='L2 perturbation step size')
+    p_gen.add_argument('--big-step', default=30, type=int, help='max iterations of Scale-Adv')
     args = p.parse_args()
 
     # Load data
     dataset = create_dataset(transform=None)
     src, _ = dataset[args.id]
-    src = resize_to_224x(src, more=args.bigger)
+    src = resize_to_224x(src, scale=args.scale, square=True)
     src = np.array(src)
 
     # Load scaling
@@ -104,36 +111,21 @@ if __name__ == '__main__':
     src_inp = scaling.scale_image(src)
     src, src_inp = map(normalize_to_batch, [src, src_inp])
 
-    # Compute scale ratio
-    sr_h, sr_w = [src.shape[i] // src_inp.shape[i] for i in [2, 3]]
-
     # Load pooling
-    # TODO: Support non-square pooling
-    pooling = NonePool2d()
-    k = sr_h * 2 - 1
+    scale_ratio = src.shape[2] // src_inp.shape[2]
+    k = scale_ratio * 2 - 1
     pooling_args = (k, 1, k // 2, mask)
-    nb_samples = NUM_SAMPLES_SAMPLE if args.defense in ['random', 'laplace'] else 1
-    if args.defense:
-        pooling = POOLING[args.defense](*pooling_args)
+    pooling = POOLING[args.defense](*pooling_args)
 
     # Load networks
     scale_net = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval()
-    class_net = nn.Sequential(NormalizationLayer.from_preset('imagenet'), resnet50_imagenet(args.robust)).eval()
-    if nb_samples > 1:
+    class_net = nn.Sequential(NormalizationLayer.from_preset('imagenet'), resnet50_imagenet(args.model)).eval()
+    if args.samples > 1:
         class_net = BalancedDataParallel(FIRST_GPU_BATCH, class_net)
 
     # Move networks to GPU
     scale_net = scale_net.cuda()
     class_net = class_net.cuda()
-
-    # Load art's proxy
-    classifier = PyTorchClassifier(class_net, nn.CrossEntropyLoss(), INPUT_SHAPE_NP, NUM_CLASSES, clip_values=(0, 1))
-    eps_step = 2.5 * args.eps / args.step
-    adv_attack = IndirectPGD(classifier, 2, args.eps, eps_step, args.step, targeted=True, batch_size=NUM_SAMPLES_PROXY)
-
-    # Load scale attack
-    scl_attack = ScaleAttack(scale_net, class_net, pooling, lr=args.lr, max_iter=args.iter, lam_inp=args.lam_inp,
-                             nb_samples=nb_samples, early_stop=True)
 
     # Add proxy if needed
     proxy = None
@@ -142,17 +134,26 @@ if __name__ == '__main__':
 
     # Adv attack
     y_target = np.eye(NUM_CLASSES, dtype=np.int)[None, args.target]
+    classifier = PyTorchClassifier(class_net, nn.CrossEntropyLoss(), INPUT_SHAPE_NP, NUM_CLASSES, clip_values=(0, 1))
+    eps_step = 2.5 * args.eps / args.step
+    adv_attack = IndirectPGD(classifier, 2, args.eps, eps_step, args.step, targeted=True, batch_size=NUM_SAMPLES_PROXY)
     adv = adv_attack.generate(x=src_inp, y=y_target, proxy=proxy)
 
-    # Scale attack based on args.mode
-    if args.mode == 'optimal':
-        att = scl_attack.generate_optimal(src=src, target=args.target, lam_ce=args.lam_ce)
+    # Scale attack based on args.action
+    scl_attack = ScaleAttack(scale_net, class_net, pooling)
+    if args.action == 'hide':
+        att = scl_attack.hide(src, adv, lr=args.lr, step=args.iter, lam_inp=args.lam_inp,
+                              mode=args.mode, nb_samples=args.samples, attack_self=False,
+                              tgt_label=args.target, test_freq=0, early_stop=True)
+    elif args.action == 'generate':
+        attack_args = dict(norm=2, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step, targeted=True,
+                           batch_size=NUM_SAMPLES_PROXY)
+        att = scl_attack.generate(src, args.target, IndirectPGD, attack_args, mode=args.mode, nb_samples=args.samples)
     else:
-        adaptive = args.mode != 'none'
-        att = scl_attack.generate(src=src, tgt=adv, adaptive=adaptive, mode=args.mode, test_freq=0, include_self=False,
-                                  y_tgt=args.target)
+        raise NotImplementedError
 
     # Test
     e = Evaluator(scale_net, class_net, pooling_args)
-    e.eval(src, adv, att, summary=True, tag=f'{args.id}.{args.defense}.{args.mode}.eps{args.eps}', save='.',
-           y_adv=args.target)
+    e.eval(src, adv, att, summary=True, y_adv=args.target,
+           tag=f'{args.tag}.{args.id}.{args.action}.{args.defense}.{args.mode}',
+           save='.')

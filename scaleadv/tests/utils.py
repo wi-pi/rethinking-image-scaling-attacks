@@ -16,10 +16,13 @@ from scaleadv.models.layers import MedianPool2d, RandomPool2d
 from scaleadv.models.scaling import ScaleNet
 
 
-def resize_to_224x(img: Image.Image, more: int = 1, square: bool = False):
+def resize_to_224x(img: Image.Image, scale: int = 0, square: bool = False):
     w, h = img.size
-    w = 224 * max(ceil(w / 224), more)
-    h = 224 * max(ceil(h / 224), more)
+    if scale:
+        w = h = 224 * scale
+    else:
+        w = 224 * ceil(w / 224)
+        h = 224 * ceil(h / 224)
     if square:
         w = h = min(w, h)
     return img.resize((w, h))
@@ -121,12 +124,20 @@ class Evaluator(object):
         if y_adv is None:
             y_adv = self.predict(adv_inp, scale=False, pooling=None).item()
 
+        # Compute adv from att
+        att_non_inp = self.scale_net(att)
+        att_med_inp = self.scale_net(self.pooling_med(att, 1))
+        att_rnd_inp = self.scale_net(self.pooling_rnd(att, 1))
+
         # Evaluation
         stats = OrderedDict({
             'SRC': self.eval_one(ref=src_big, x=src_big, scale=True),
             'ADV': self.eval_one(ref=src_inp, x=adv_inp, scale=False),
             'BASE': self.eval_one(ref=src_big, x=adv_big, scale=True),
-            'ATT': self.eval_one(ref=src_big, x=att, scale=True)
+            'ATT': self.eval_one(ref=src_big, x=att, scale=True),
+            'ATT-INP-NON': self.eval_one(ref=src_inp, x=att_non_inp, scale=False),
+            'ATT-INP-MED': self.eval_one(ref=src_inp, x=att_med_inp, scale=False),
+            'ATT-INP-RND': self.eval_one(ref=src_inp, x=att_rnd_inp, scale=False),
         })
 
         if summary:
