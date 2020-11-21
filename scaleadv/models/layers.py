@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.distributions.laplace import Laplace
 from torch.nn.modules.utils import _pair, _quadruple
 
-from scaleadv.attacks.utils import mask_mad, estimate_mad
+from scaleadv.attacks.utils import estimate_mad
 from scaleadv.datasets.imagenet import IMAGENET_STD, IMAGENET_MEAN
 
 
@@ -62,6 +62,10 @@ class Pool2d(nn.Module):
         self.padding = _quadruple(padding)  # convert to l, r, t, b
         self.mask = 1 if mask is None else torch.as_tensor(mask, dtype=torch.float32).to(self.dev)
         self.protect_mask = 1 - self.mask
+
+    @classmethod
+    def from_pooling(cls, pool: "Pool2d"):
+        return cls(pool.kernel_size, pool.stride, pool.padding, pool.mask)
 
     def forward(self, x: torch.Tensor, n: int = 1, *args, **kwargs):
         # preprocess
