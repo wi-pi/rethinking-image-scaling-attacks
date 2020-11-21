@@ -16,10 +16,13 @@ from scaleadv.models.layers import MedianPool2d, RandomPool2d
 from scaleadv.models.scaling import ScaleNet
 
 
-def resize_to_224x(img: Image.Image, more: int = 1, square: bool = False):
+def resize_to_224x(img: Image.Image, scale: int = 0, square: bool = False):
     w, h = img.size
-    w = 224 * max(ceil(w / 224), more)
-    h = 224 * max(ceil(h / 224), more)
+    if scale:
+        w = h = 224 * scale
+    else:
+        w = 224 * ceil(w / 224)
+        h = 224 * ceil(h / 224)
     if square:
         w = h = min(w, h)
     return img.resize((w, h))
