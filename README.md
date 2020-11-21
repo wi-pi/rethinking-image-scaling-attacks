@@ -16,65 +16,70 @@ Understanding the real potential of Image-Scaling attacks.
 
 ## Common Usage Examples
 
-### Hide a given adversarial example
+### Set global arguments
 
 > See detailed help in `python -m scaleadv.tests.scale_adv -h`
+>
+> These arguments are generally the `...` parts in Hide/Generate examples.
 
-**Example: Hide PGD-30 with L2-20 to bypass the median defense.**
+**Example: Test cv.linear on PGD-30 with L2-20 to bypass the median defense.**
 
 ```sh
-python -m scaleadv.tests.scale_adv \
---id 5000 --target 200 --robust 2 \
---lib cv --algo linear --bigger 3 \
+python -m sclaeadv.tests.scale_adv \
+--id 5000 --target 200 --model 2 \
+--lib cv --algo linear --scale 3 \
 --eps 20 --step 30 \
---lr 0.01 --lam-inp 8 --iter 1000 --defense median --mode sample
+--defense median
 ```
 
-**Example: Hide PGD-30 with L2-20 to bypass the random defense.**
+**Example: Test cv.linear on PGD-30 with L2-20 to bypass the random defense, approximate by cheap sampling.**
 
 ```sh
-python -m scaleadv.tests.scale_adv \
---id 5000 --target 200 --robust 2 \
---lib cv --algo linear --bigger 3 \
+python -m sclaeadv.tests.scale_adv \
+--id 5000 --target 200 --model 2 \
+--lib cv --algo linear --scale 3 \
 --eps 20 --step 30 \
---lr 0.1 --lam-inp 200 --iter 120 --defense random --mode sample
+--defense random --mode cheap --samples 200
+```
+
+### Hide a given adversarial example
+
+> See detailed help in `python -m scaleadv.tests.scale_adv hide -h`
+
+**Example: Hide to bypass the median defense.**
+
+```sh
+python -m scaleadv.tests.scale_adv ... \
+--defense median \
+hide --lr 0.01 --lam-inp 8 --iter 1000
+```
+
+**Example: Hide to bypass the random defense.**
+
+```sh
+python -m scaleadv.tests.scale_adv ... \
+--defense random --mode cheap --samples 200 \
+hide --lr 0.1 --lam-inp 200 --iter 120
 ```
 
 ### Generate an HR adversarial example
 
-> See detailed help in `python -m scaleadv.tests.scale_adv_optimal -h`
+> See detailed help in `python -m scaleadv.tests.scale_adv generate -h`
 
-**Example: Generate HR adv-example with PGD-100 and L2-50 to bypass median defense.**
+**Example: Generate to bypass the median defense.**
 
 ```sh
-python -m scaleadv.tests.scale_adv_optimal \
---id 5000 --target 200 --robust 2 \
---lib cv --algo linear --bigger 3 \
---eps 20 --step 30 \
---big-eps 50 --big-step 100 \
---defense median
+python -m scaleadv.tests.scale_adv ... \
+--defense median \
+generate --big-eps 40 --big-sig 4.0 --big-step 100
 ```
 
-**Example: Generate HR adv-example with PGD-100 and L2-50 to bypass random defense.**
+**Example: Generate to bypass the random defense.**
 
 ```sh
-python -m scaleadv.tests.scale_adv_optimal \
---id 5000 --target 200 --robust 2 \
---lib cv --algo linear --bigger 3 \
---eps 20 --step 30 \
---big-eps 50 --big-step 100 \
---defense random
-```
-
-**Example: Bypass random defense with Cheap/Laplacian approximation.**
-
-```sh
-python -m scaleadv.tests.scale_adv_optimal \
---id 5000 --target 200 --robust 2 \
---lib cv --algo linear --bigger 3 \
---eps 20 --step 30 \
---big-eps 50 --big-step 100 \
---defense cheap/laplace
+python -m scaleadv.tests.scale_adv ... \
+--defense random --mode cheap --samples 200 \
+generate --big-eps 40 --big-sig 4.0 --big-step 100
 ```
 
 ### Plot random pooling's histogram.
@@ -92,6 +97,9 @@ python -m scaleadv.experiments.random_hist \
 
 * Pretrained Robust Models
   * https://github.com/MadryLab/robustness#pretrained-models
+* Pretrained Smoothing Models
+  * https://github.com/locuslab/smoothing#getting-started
+  * https://github.com/Hadisalman/smoothing-adversarial#download-our-pretrained-models
 * Previous Image-Scaling Attack's Implementation
   * https://github.com/yfchen1994/scaling_camouflage
   * https://github.com/EQuiw/2019-scalingattack/tree/master/scaleatt
