@@ -236,6 +236,7 @@ class ScaleAttack(object):
             mode: Optional[str] = None,
             nb_samples: int = 1,
             nb_classes: int = 1000,
+            verbose: bool = True,
     ) -> np.ndarray:
         """Generate a HR adversarial image.
 
@@ -247,6 +248,7 @@ class ScaleAttack(object):
             mode: how to approximate the random pooling, see `RANDOM_APPROXIMATION`.
             nb_samples: how many samples to approximate the random pooling.
             nb_classes: total number of classes.
+            verbose: output losses
 
         Returns:
             np.ndarray: final large attack image
@@ -265,7 +267,7 @@ class ScaleAttack(object):
         # Load networks
         full_net = FullScaleNet(self.scale_net, self.class_net, pooling, n=1)
         classifier = AverageGradientClassifier(full_net, ReducedCrossEntropyLoss(), tuple(src.shape[1:]), nb_classes,
-                                               nb_samples=nb_samples, verbose=True, y_cmp=[y_src, y_tgt],
+                                               nb_samples=nb_samples, verbose=verbose, y_cmp=[y_src, y_tgt],
                                                clip_values=(0, 1))
 
         # Attack

@@ -169,13 +169,13 @@ class Evaluator(object):
             'Y_MED': self.predict(x, scale=True, pooling='med').item() if scale else None,
             'Y_RND': self.predict(x, scale=True, pooling='rnd') if scale else None,
             # distance
-            'L-INF': torch.norm(x - ref, p=np.inf),
-            'L-2': torch.norm(x - ref, p=2),
+            'L-INF': torch.norm(x - ref, p=np.inf).cpu(),
+            'L-2': torch.norm(x - ref, p=2).cpu(),
             # similarity
-            'PSNR': piq.psnr(x, ref, data_range=1),
-            'SSIM': piq.ssim(x, ref, data_range=1),
-            'MS-SSIM': piq.multi_scale_ssim(x, ref, data_range=1),
-            'LPIPS': self.lpips(x * 2 - 1, ref * 2 - 1),
+            'PSNR': piq.psnr(x.cpu(), ref.cpu(), data_range=1).cpu(),
+            'SSIM': piq.ssim(x.cpu(), ref.cpu(), data_range=1).cpu(),
+            'MS-SSIM': piq.multi_scale_ssim(x.cpu(), ref.cpu(), data_range=1).cpu(),
+            'LPIPS': 0,#self.lpips(x.cpu() * 2 - 1, ref.cpu() * 2 - 1).cpu(),
         })
         return stats
 
