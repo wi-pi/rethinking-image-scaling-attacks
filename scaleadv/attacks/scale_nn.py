@@ -229,10 +229,11 @@ class ScaleAttack(object):
 
     def generate(
             self,
-            src: np.ndarray,
-            target: int,
+            x_src: np.ndarray,
+            y_src: int,
             attack_cls: Type[ART_ATTACK],
             attack_args: Dict,
+            y_tgt: Optional[int] = None,
             mode: Optional[str] = None,
             nb_samples: int = 1,
             nb_classes: int = 1000,
@@ -241,10 +242,11 @@ class ScaleAttack(object):
         """Generate a HR adversarial image.
 
         Args:
-            src: large source image of shape [1, 3, H, W].
-            target: target label
+            x_src: large source image of shape [1, 3, H, W].
+            y_src: label of source image.
             attack_cls: class of adv attacker
             attack_args: kw args of adv attacker
+            y_tgt: target label, set to None for un-targeted attack.
             mode: how to approximate the random pooling, see `RANDOM_APPROXIMATION`.
             nb_samples: how many samples to approximate the random pooling.
             nb_classes: total number of classes.
@@ -254,25 +256,25 @@ class ScaleAttack(object):
             np.ndarray: final large attack image
         """
         # Check params & convert to tensors
-        src = self._check_input(src)
+        x_src = self._check_input(x_src)
         self._check_mode(mode, nb_samples)
 
-        # Get reference labels
-        y_src = self.predict(src, scale=True, pooling=False, n=1).item()
-        y_tgt = target
+        # For un-targeted attack, we set y_tgt to y_src
+        if y_tgt is None:
+            y_tgt = y_src
 
         # Prepare pooling layer to be attacked
-        pooling = self._get_attack_pooling(mode, src)
+        pooling = self._get_attack_pooling(mode, x_src)
 
         # Load networks
         full_net = FullScaleNet(self.scale_net, self.class_net, pooling, n=1)
-        classifier = AverageGradientClassifier(full_net, ReducedCrossEntropyLoss(), tuple(src.shape[1:]), nb_classes,
+        classifier = AverageGradientClassifier(full_net, ReducedCrossEntropyLoss(), tuple(x_src.shape[1:]), nb_classes,
                                                nb_samples=nb_samples, verbose=verbose, y_cmp=[y_src, y_tgt],
                                                clip_values=(0, 1))
 
         # Attack
         attack = attack_cls(classifier, **attack_args)
-        y_target = np.eye(nb_classes, dtype=np.int)[None, y_tgt]
-        att = attack.generate(x=src.cpu(), y=y_target)
+        y_tgt = np.eye(nb_classes, dtype=np.int)[None, y_tgt]
+        att = attack.generate(x=x_src.cpu(), y=y_tgt)
 
         return att
