@@ -9,7 +9,6 @@ import torch
 import torch.nn as nn
 import torchvision.transforms.functional as F
 from PIL import Image
-from lpips import LPIPS
 from prettytable import PrettyTable
 
 from scaleadv.models.layers import MedianPool2d, RandomPool2d
@@ -29,7 +28,7 @@ def resize_to_224x(img: Image.Image, scale: int = 0, square: bool = False):
 
 
 class Evaluator(object):
-    DIFF_FIELDS = ['Y', 'Y_MED', 'Y_RND', 'L-INF', 'L-2', 'PSNR', 'SSIM', 'MS-SSIM', 'LPIPS']
+    DIFF_FIELDS = ['Y', 'Y_MED', 'Y_RND', 'L-INF', 'L-2', 'PSNR', 'SSIM', 'MS-SSIM']
 
     def __init__(self, scale_net: ScaleNet, class_net: nn.Module, pooling_args: Tuple, nb_samples: int = 200):
         self.scale_net = scale_net
@@ -37,7 +36,6 @@ class Evaluator(object):
         self.pooling_med = MedianPool2d(*pooling_args)
         self.pooling_rnd = RandomPool2d(*pooling_args)
         self.nb_samples = nb_samples
-        self.lpips = LPIPS(net='alex', verbose=False).cuda()
 
     @staticmethod
     def _check(x: np.ndarray) -> torch.Tensor:
@@ -175,7 +173,6 @@ class Evaluator(object):
             'PSNR': piq.psnr(x.cpu(), ref.cpu(), data_range=1).cpu(),
             'SSIM': piq.ssim(x.cpu(), ref.cpu(), data_range=1).cpu(),
             'MS-SSIM': piq.multi_scale_ssim(x.cpu(), ref.cpu(), data_range=1).cpu(),
-            'LPIPS': 0,#self.lpips(x.cpu() * 2 - 1, ref.cpu() * 2 - 1).cpu(),
         })
         return stats
 
