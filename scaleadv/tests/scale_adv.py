@@ -139,6 +139,7 @@ if __name__ == '__main__':
     targeted = args.target is not None
     adv_attack = IndirectPGD(classifier, 2, args.eps, eps_step, args.step, targeted, batch_size=NUM_SAMPLES_PROXY)
     y_tgt = np.eye(NUM_CLASSES, dtype=np.int)[None, args.target if targeted else y_src]
+    # Generate adv example
     adv = adv_attack.generate(x=src_inp, y=y_tgt, proxy=proxy)
 
     # Scale attack based on args.action
@@ -146,7 +147,7 @@ if __name__ == '__main__':
     if args.action == 'hide':
         att = scl_attack.hide(src, adv, lr=args.lr, step=args.iter, lam_inp=args.lam_inp,
                               mode=args.mode, nb_samples=args.samples, attack_self=False,
-                              tgt_label=args.target, test_freq=0, early_stop=True)
+                              src_label=y_src, tgt_label=args.target, test_freq=0, early_stop=True)
     elif args.action == 'generate':
         attack_args = dict(norm=2, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step, targeted=targeted,
                            batch_size=NUM_SAMPLES_PROXY)

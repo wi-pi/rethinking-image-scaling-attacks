@@ -134,6 +134,7 @@ class ScaleAttack(object):
             mode: Optional[str] = None,
             nb_samples: int = 1,
             attack_self: bool = False,
+            src_label: int = None,
             tgt_label: int = None,
             test_freq: int = 0,
             early_stop: bool = True,
@@ -149,6 +150,7 @@ class ScaleAttack(object):
             mode: how to approximate the random pooling, see `RANDOM_APPROXIMATION`.
             nb_samples: how many samples to approximate the random pooling.
             attack_self: True if include non-defense source image in the loop.
+            src_label: source label for the input (for test only)
             tgt_label: target label for the adv-example (for test only)
             test_freq: run full test per `test_freq` iterations, set 0 to disable it.
             early_stop: stop if loss converges.
@@ -162,7 +164,7 @@ class ScaleAttack(object):
         self._check_mode(mode, nb_samples)
 
         # Get reference labels
-        y_src = self.predict(src, scale=True).item()
+        y_src = self.predict(src, scale=True).item() if src_label is None else src_label
         y_tgt = self.predict(tgt, scale=False).item() if tgt_label is None else tgt_label
 
         # Prepare attack vars
