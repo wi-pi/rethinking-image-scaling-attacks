@@ -63,7 +63,7 @@ if __name__ == '__main__':
     p = ArgumentParser()
     # Input args
     p.add_argument('--id', type=int, required=True, help='ID of test image')
-    p.add_argument('--target', type=int, required=True, help='target label')
+    p.add_argument('--target', default=None, type=int, help='target label, unset for un-targeted attack')
     p.add_argument('--model', default=None, type=str, choices=ROBUST_MODELS, help='use robust model, optional')
     # Scaling args
     p.add_argument('--lib', default='cv', type=str, choices=LIB, help='scaling libraries')
@@ -96,7 +96,7 @@ if __name__ == '__main__':
 
     # Load data
     dataset = create_dataset(transform=None)
-    src, _ = dataset[args.id]
+    src, y_src = dataset[args.id]
     src = resize_to_224x(src, scale=args.scale, square=True)
     src = np.array(src)
 
@@ -133,22 +133,26 @@ if __name__ == '__main__':
         proxy = NoiseProxy(np.random.normal, n=NUM_SAMPLES_PROXY, loc=0, scale=0.1)
 
     # Adv attack
-    y_target = np.eye(NUM_CLASSES, dtype=np.int)[None, args.target]
     classifier = PyTorchClassifier(class_net, nn.CrossEntropyLoss(), INPUT_SHAPE_NP, NUM_CLASSES, clip_values=(0, 1))
     eps_step = 2.5 * args.eps / args.step
-    adv_attack = IndirectPGD(classifier, 2, args.eps, eps_step, args.step, targeted=True, batch_size=NUM_SAMPLES_PROXY)
-    adv = adv_attack.generate(x=src_inp, y=y_target, proxy=proxy)
+    # Set targeted option
+    targeted = args.target is not None
+    adv_attack = IndirectPGD(classifier, 2, args.eps, eps_step, args.step, targeted, batch_size=NUM_SAMPLES_PROXY)
+    y_tgt = np.eye(NUM_CLASSES, dtype=np.int)[None, args.target if targeted else y_src]
+    # Generate adv example
+    adv = adv_attack.generate(x=src_inp, y=y_tgt, proxy=proxy)
 
     # Scale attack based on args.action
     scl_attack = ScaleAttack(scale_net, class_net, pooling)
     if args.action == 'hide':
         att = scl_attack.hide(src, adv, lr=args.lr, step=args.iter, lam_inp=args.lam_inp,
                               mode=args.mode, nb_samples=args.samples, attack_self=False,
-                              tgt_label=args.target, test_freq=0, early_stop=True)
+                              src_label=y_src, tgt_label=args.target, test_freq=0, early_stop=True)
     elif args.action == 'generate':
-        attack_args = dict(norm=2, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step, targeted=True,
+        attack_args = dict(norm=2, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step, targeted=targeted,
                            batch_size=NUM_SAMPLES_PROXY)
-        att = scl_attack.generate(src, args.target, IndirectPGD, attack_args, mode=args.mode, nb_samples=args.samples)
+        att = scl_attack.generate(src, y_src, IndirectPGD, attack_args, y_tgt=args.target,
+                                  mode=args.mode, nb_samples=args.samples)
     else:
         raise NotImplementedError
 
