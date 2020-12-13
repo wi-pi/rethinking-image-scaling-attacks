@@ -36,6 +36,12 @@ from scaleadv.models.resnet import resnet50_imagenet, IMAGENET_MODEL_PATH
 from scaleadv.models.scaling import ScaleNet
 from scaleadv.tests.utils import resize_to_224x, Evaluator
 
+# Adversarial attack modes
+NORM = {
+    '2': 2,
+    'inf': np.inf,
+}
+
 # Scaling libs & algorithms
 LIB = ['cv', 'tf', 'pil']
 ALGO = ['nearest', 'linear', 'cubic', 'lanczos', 'area']
@@ -61,6 +67,7 @@ NUM_SAMPLES_SAMPLE = 100  # for monte carlo sampling of scale-attack
 
 if __name__ == '__main__':
     p = ArgumentParser()
+    _ = p.add_argument
     # Input args
     p.add_argument('--id', type=int, required=True, help='ID of test image')
     p.add_argument('--target', default=None, type=int, help='target label, unset for un-targeted attack')
@@ -70,6 +77,7 @@ if __name__ == '__main__':
     p.add_argument('--algo', default='linear', type=str, choices=ALGO, help='scaling algorithms')
     p.add_argument('--scale', default=0, type=int, help='set a fixed scale ratio, 0 to use the original size')
     # Adversarial attack args
+    p.add_argument('--norm', default='2', type=str, choices=NORM.keys(), help='adv-attack norm')
     p.add_argument('--eps', default=20, type=float, help='L2 perturbation of adv-example')
     p.add_argument('--step', default=30, type=int, help='max iterations of PGD attack')
     p.add_argument('--adv-proxy', action='store_true', help='do adv-attack on noisy proxy')
@@ -93,6 +101,9 @@ if __name__ == '__main__':
     p_gen.add_argument('--big-sig', default=4.0, type=float, help='L2 perturbation step size')
     p_gen.add_argument('--big-step', default=30, type=int, help='max iterations of Scale-Adv')
     args = p.parse_args()
+
+    # Pre-process special args
+    args.norm = NORM[args.norm]
 
     # Load data
     dataset = create_dataset(transform=None)
@@ -137,9 +148,10 @@ if __name__ == '__main__':
     eps_step = 2.5 * args.eps / args.step
     # Set targeted option
     targeted = args.target is not None
-    adv_attack = IndirectPGD(classifier, 2, args.eps, eps_step, args.step, targeted, batch_size=NUM_SAMPLES_PROXY)
-    y_tgt = np.eye(NUM_CLASSES, dtype=np.int)[None, args.target if targeted else y_src]
+    adv_attack = IndirectPGD(classifier, args.norm, args.eps, eps_step, args.step,
+                             targeted=targeted, batch_size=NUM_SAMPLES_PROXY)
     # Generate adv example
+    y_tgt = np.eye(NUM_CLASSES, dtype=np.int)[None, args.target if targeted else y_src]
     adv = adv_attack.generate(x=src_inp, y=y_tgt, proxy=proxy)
 
     # Scale attack based on args.action
@@ -149,7 +161,8 @@ if __name__ == '__main__':
                               mode=args.mode, nb_samples=args.samples, attack_self=False,
                               src_label=y_src, tgt_label=args.target, test_freq=0, early_stop=True)
     elif args.action == 'generate':
-        attack_args = dict(norm=2, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step, targeted=targeted,
+        attack_args = dict(norm=args.norm, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step,
+                           targeted=targeted,
                            batch_size=NUM_SAMPLES_PROXY)
         att = scl_attack.generate(src, y_src, IndirectPGD, attack_args, y_tgt=args.target,
                                   mode=args.mode, nb_samples=args.samples)
