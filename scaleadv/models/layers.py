@@ -103,11 +103,13 @@ class AveragePool2d(Pool2d):
 
 class CheapRandomPool2d(Pool2d):
 
-    def __init__(self, *args, avg=True):
+    def __init__(self, *args, avg=True, flush=20):
         super(CheapRandomPool2d, self).__init__(*args)
         self.avg = AveragePool2d(*args) if avg else None
         self.rnd = RandomPool2d(*args)
         self.noise = None
+        self.cnt = 0
+        self.flush = flush
 
     def forward(self, x: torch.Tensor, n: int = 1, *args, **kwargs):
         if self.avg is not None:
@@ -115,8 +117,10 @@ class CheapRandomPool2d(Pool2d):
         return super(CheapRandomPool2d, self).forward(x, n)
 
     def _pool(self, x: torch.Tensor, *args, **kwargs):
-        if self.noise is None or self.noise.shape[0] != x.shape[0]:
+        self.cnt += 1
+        if self.noise is None or self.noise.shape[0] != x.shape[0] or self.cnt >= self.flush:
             self.noise = self.rnd(x).data - x.data
+            self.cnt = 0
         x = torch.clamp(x + self.noise, 0, 1)
         return x
 

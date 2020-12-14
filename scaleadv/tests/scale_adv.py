@@ -131,7 +131,7 @@ if __name__ == '__main__':
     # Load networks
     scale_net = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval()
     class_net = nn.Sequential(NormalizationLayer.from_preset('imagenet'), resnet50_imagenet(args.model)).eval()
-    if args.samples > 1:
+    if args.samples > 99:
         class_net = BalancedDataParallel(FIRST_GPU_BATCH, class_net)
 
     # Move networks to GPU
