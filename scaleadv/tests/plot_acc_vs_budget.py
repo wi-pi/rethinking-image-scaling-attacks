@@ -67,27 +67,30 @@ class AccBudget(object):
         kernel = src_size[0] // inp_size[0] * 2 - 1
         pooling_args = kernel, 1, kernel // 2, mask
         pooling = POOLING[defense](*pooling_args)
-        nb_samples = 1 if mode is None else 128
+        nb_samples = 1 if mode is None else 20
 
         # Get networks
         scale_net = ScaleNet(scaling.cl_matrix, scaling.cr_matrix).eval()
         class_net = self.class_net.eval()
-        if nb_samples > 1:
+        if nb_samples > 99:
             class_net = BalancedDataParallel(FIRST_GPU_BATCH, class_net)
         scale_net = scale_net.cuda()
         class_net = class_net.cuda()
 
         # Get art's proxy
-        classifier = PyTorchClassifier(class_net, nn.CrossEntropyLoss(), INPUT_SHAPE_NP, NUM_CLASSES,
-                                       clip_values=(0, 1))
-        y_target = np.eye(NUM_CLASSES, dtype=int)[None, self.target]
+        classify = PyTorchClassifier(class_net, nn.CrossEntropyLoss(), INPUT_SHAPE_NP, NUM_CLASSES, clip_values=(0, 1))
+
+        # Get art's attack
         eps_step = 2.5 * eps / self.STEP
-        adv_attack = IndirectPGD(classifier, self.NORM, eps, eps_step, self.STEP, targeted=True, verbose=False)
+        targeted = self.target is not None
+        adv_attack = IndirectPGD(classify, self.NORM, eps, eps_step, self.STEP, targeted=targeted, verbose=False)
 
         # Get scaling attack
         scl_attack = ScaleAttack(scale_net, class_net, pooling)
-        attack_args = dict(norm=self.NORM, eps=eps * ratio, eps_step=4.0 * eps / self.STEP, max_iter=self.BIG_STEP,
-                           targeted=True, batch_size=NUM_SAMPLES_PROXY, verbose=False)
+        big_eps = eps * ratio
+        big_eps_step = big_eps * 30. / self.BIG_STEP
+        attack_args = dict(norm=self.NORM, eps=big_eps, eps_step=big_eps_step, max_iter=self.BIG_STEP,
+                           targeted=targeted, batch_size=NUM_SAMPLES_PROXY, verbose=False)
 
         # Eval all data
         e = Evaluator(scale_net, class_net, pooling_args, nb_samples=nb_samples)
@@ -99,10 +102,11 @@ class AccBudget(object):
                 inp = scale_net(src.cuda()).cpu().numpy()
                 src = src.cpu().numpy()
                 # get adv
-                adv = adv_attack.generate(inp, y_target)
+                y_tgt = np.eye(NUM_CLASSES, dtype=np.int)[None, self.target if targeted else y]
+                adv = adv_attack.generate(inp, y_tgt)
                 # get att
-                att = scl_attack.generate(src, self.target, IndirectPGD, attack_args, mode=mode, nb_samples=nb_samples,
-                                          verbose=False)
+                att = scl_attack.generate(src, y, IndirectPGD, attack_args, y_tgt=self.target, mode=mode,
+                                          nb_samples=nb_samples, verbose=False)
                 # eval
                 stats = e.eval(src, adv, att, y_adv=self.target)
                 data.append(stats)
@@ -135,6 +139,7 @@ class AccBudget(object):
             plt.plot(eps, acc, label=tag.lower())
         plt.legend()
         plt.savefig(f'test-{tt}.pdf')
+        plt.close()
 
 
 def plot_all():
@@ -170,7 +175,7 @@ if __name__ == '__main__':
 
     p = ArgumentParser()
     # Input args
-    p.add_argument('--target', type=int, required=True)
+    p.add_argument('--target', default=None, type=int)
     p.add_argument('--model', default=None, type=str, choices=ROBUST_MODELS)
     # Scaling args
     p.add_argument('--ratio', type=int, choices=(2, 3, 4, 5, 6))
