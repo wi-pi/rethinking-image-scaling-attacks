@@ -108,7 +108,8 @@ class AccBudget(object):
                 att = scl_attack.generate(src, y, IndirectPGD, attack_args, y_tgt=self.target, mode=mode,
                                           nb_samples=nb_samples, verbose=False)
                 # eval
-                stats = e.eval(src, adv, att, y_adv=self.target)
+                stats = e.eval(src, adv, att, y_src=y, y_adv=self.target)
+                stats['Y'] = y.item()
                 data.append(stats)
 
                 if dump:
@@ -117,12 +118,8 @@ class AccBudget(object):
         return data
 
     def get_acc(self, data: List, img_field: str = 'SRC', y_field: str = 'Y'):
-        cnt = 0
-        for stat in data:
-            pred = scipy.stats.mode(stat[img_field][y_field])[0]
-            if stat['SRC']['Y'] == pred:
-                cnt += 1
-        acc = cnt / len(data) * 100
+        cnt = [stat['Y'] == scipy.stats.mode(stat[img_field][y_field])[0] for stat in data]
+        acc = sum(cnt) / len(data) * 100
         return acc
 
     def collect(self, data: List, eps: int, tag: str, plot: bool = True):
@@ -131,14 +128,18 @@ class AccBudget(object):
         self.saved_results['ATT'].append((eps, self.get_acc(data, 'ATT', tag)))
         if plot:
             self.plot(tag)
+        for f in ['ADV', 'ATT']:
+            print(f, self.saved_results[f][-1][1])
 
     def plot(self, tt):
         plt.figure()
         for tag in ['ADV', 'ATT']:
             eps, acc = zip(*self.saved_results[tag])
-            plt.plot(eps, acc, label=tag.lower())
+            plt.plot(eps, acc, marker='o', markersize=3, label=tag.lower())
+        plt.ylim(-5, 105)
+        plt.yticks(list(range(0, 101, 10)))
         plt.legend()
-        plt.savefig(f'test-{tt}.pdf')
+        plt.savefig(f'test-{tt}-{eps[0]}.pdf')
         plt.close()
 
 
@@ -148,7 +149,7 @@ def plot_all():
 
     for defense, tag in defenses.items():
         tester = AccBudget(class_net, args.target, lib='cv', algo='linear', tag='TEST')
-        for eps in range(1, 26):
+        for eps in range(args.left, args.right, args.step):
             mode = 'cheap' if defense == 'random' else None
             d = tester.eval_ratio_eps(args.ratio, eps=eps, defense=defense, mode=mode, dump=False, load=True)
             if d is not None and len(d) == 100:
@@ -161,9 +162,10 @@ def plot_all():
         eps, acc = zip(*tester.saved_results['ATT'])
         plt.plot(eps, acc, marker='o', markersize=3, label=f'Scale-Adv Attack ({defense})')
 
-    plt.ylim(-5, 105)
+    plt.ylim(-5, 65)
     plt.legend()
-    plt.yticks(list(range(0, 101, 10)))
+    plt.xticks(list(range(0, args.right + 1, 2)))
+    plt.yticks(list(range(0, 61, 5)))
     plt.savefig('gen_acc-vs-L2.pdf')
 
 
@@ -171,7 +173,7 @@ if __name__ == '__main__':
     # set font for ccs
     mpl.rcParams['font.sans-serif'] = "Linux Libertine"
     mpl.rcParams['font.family'] = "sans-serif"
-    mpl.rcParams['font.size'] = 13
+    mpl.rcParams['font.size'] = 15
 
     p = ArgumentParser()
     # Input args
@@ -180,6 +182,10 @@ if __name__ == '__main__':
     # Scaling args
     p.add_argument('--ratio', type=int, choices=(2, 3, 4, 5, 6))
     p.add_argument('--defense', type=str)
+    # Attack args
+    p.add_argument('-l', '--left', default=1, type=int)
+    p.add_argument('-r', '--right', default=26, type=int)
+    p.add_argument('-s', '--step', default=1, type=int)
     # Misc
     p.add_argument('--load', action='store_true')
     p.add_argument('--plot', action='store_true')
@@ -195,7 +201,7 @@ if __name__ == '__main__':
 
     # attack
     tester = AccBudget(class_net, args.target, lib='cv', algo='linear', tag='TEST')
-    for eps in range(1, 26):
+    for eps in range(args.left, args.right, args.step):
         mode = 'cheap' if args.defense == 'random' else None
         d = tester.eval_ratio_eps(args.ratio, eps=eps, defense=args.defense, mode=mode, dump=True, load=args.load)
         tag = {'random': 'Y_RND', 'median': 'Y_MED', 'none': 'Y'}

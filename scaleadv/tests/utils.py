@@ -104,6 +104,7 @@ class Evaluator(object):
             summary: bool = False,
             tag: str = '',
             save: str = '',
+            y_src: int = None,
             y_adv: int = None
     ):
         # Check params & to tensors
@@ -118,7 +119,8 @@ class Evaluator(object):
         adv_inp = adv
 
         # Compute labels
-        y_src = self.predict(src_inp, scale=False, pooling=None).item()
+        if y_src is None:
+            y_src = self.predict(src_inp, scale=False, pooling=None).item()
         if y_adv is None:
             y_adv = self.predict(adv_inp, scale=False, pooling=None).item()
 
