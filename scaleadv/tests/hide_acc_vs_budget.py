@@ -46,7 +46,7 @@ class AccBudget(object):
     def eval_ratio_eps(self, ratio: int, norm: str, eps: int, defense: str = 'none', mode: str = None,
                        dump: bool = True, load: bool = False):
         norm_tag = f'{norm}.' if norm == 'inf' else ''
-        fname = f'eval-dataset.{ratio}.{norm_tag}{eps:03d}.{defense}.{mode}.pkl'
+        fname = f'eval-dataset-hide.{ratio}.{norm_tag}{eps:03d}.{defense}.{mode}.pkl'
         if load:
             if os.path.exists(fname):
                 print(fname)
@@ -91,16 +91,8 @@ class AccBudget(object):
         # Get art's attack
         adv_attack = IndirectPGD(classify, norm, _eps, _step, _iter, targeted=targeted, verbose=False)
 
-        # Set scaling's attack params
-        if norm == 2:
-            _eps = _eps * ratio
-            _iter = self.BIG_STEP
-            _step = 30. * _eps / _iter
-
         # Get scaling attack
         scl_attack = ScaleAttack(scale_net, class_net, pooling)
-        attack_args = dict(norm=norm, eps=_eps, eps_step=_step, max_iter=_iter, targeted=targeted,
-                           batch_size=NUM_SAMPLES_PROXY, verbose=False)
 
         # Eval all data
         e = Evaluator(scale_net, class_net, pooling_args, nb_samples=nb_samples)
@@ -111,19 +103,25 @@ class AccBudget(object):
                 # get input
                 inp = scale_net(src.cuda()).cpu().numpy()
                 src = src.cpu().numpy()
+                y = y.item()
                 # get adv
                 y_tgt = np.eye(NUM_CLASSES, dtype=np.int)[None, self.target if targeted else y]
                 adv = adv_attack.generate(inp, y_tgt)
                 # get att
-                att = scl_attack.generate(src, y, IndirectPGD, attack_args, y_tgt=self.target, mode=mode,
-                                          nb_samples=nb_samples, verbose=False)
+                att = scl_attack.hide(src, adv, lr=0.01, step=1000, lam_inp=7, mode=mode, nb_samples=nb_samples,
+                                      src_label=y, tgt_label=self.target, verbose=False)
                 # eval
                 stats = e.eval(src, adv, att, y_src=y, y_adv=self.target)
-                stats['Y'] = y.item()
+                stats['Y'] = y
                 data.append(stats)
 
-                if dump:
-                    pickle.dump(data, open(fname, 'wb'))
+                if i == 2:
+                    from IPython import embed;
+                    embed(using=False);
+                    exit()
+
+                # if dump:
+                #     pickle.dump(data, open(fname, 'wb'))
 
         return data
 
@@ -144,7 +142,7 @@ class AccBudget(object):
         if plot:
             self.plot(tag)
         for f in ['ADV', 'ATT']:
-            print(f, self.saved_results[f][-1][1])
+            print(f, self.saved_results[f][-1])
 
     def plot(self, tt):
         plt.figure()
@@ -161,8 +159,7 @@ class AccBudget(object):
 def plot_all():
     defenses = {'none': 'Y', 'median': 'Y_MED', 'random': 'Y_RND'}
     fig, ax_acc = plt.subplots(constrained_layout=True)
-    if args.norm == 'inf':
-        ax_pert = ax_acc.twinx()
+    ax_pert = ax_acc.twinx()
 
     for defense, tag in defenses.items():
         tester = AccBudget(class_net, args.target, lib='cv', algo='linear', tag='TEST')
@@ -171,26 +168,27 @@ def plot_all():
             d = tester.eval_ratio_eps(args.ratio, args.norm, eps=eps, defense=defense, mode=mode, dump=False, load=True)
             if d is not None and len(d) == 100:
                 tester.collect(d, eps, tag, plot=False)
+
         # plot adv
         if defense == 'none':
             eps, acc, pert = zip(*tester.saved_results['ADV'])
             ax_acc.plot(eps, acc, marker='o', markersize=4, lw=2, label='PGD Attack')
-            if args.norm == 'inf':
-                ax_pert.plot(eps, pert, ls=':', lw=2)
-
-        # plot att
-        eps, acc, pert = zip(*tester.saved_results['ATT'])
-        pert = [x / args.ratio for x in pert]
-        ax_acc.plot(eps, acc, marker='o', markersize=3, label=f'Scale-Adv Attack ({defense})')
-        if args.norm == 'inf':
             ax_pert.plot(eps, pert, ls=':', lw=2)
 
-    ax_acc.set_ylim(-5, 65)
+        # plot att
+        if tester.saved_results['ATT']:
+            eps, acc, pert = zip(*tester.saved_results['ATT'])
+            pert = [x / args.ratio for x in pert]
+            ax_acc.plot(eps, acc, marker='o', markersize=3, label=f'Scale-Adv Attack ({defense})')
+            ax_pert.plot(eps, pert, ls=':', lw=2)
+
     fig.legend(bbox_to_anchor=(1, 1), bbox_transform=ax_acc.transAxes)
+    ax_acc.set_ylim(-5, 65)
     ax_acc.set_xticks(list(range(0, args.right + 1, 2)))
     ax_acc.set_yticks(list(range(0, 61, 5)))
+    ax_pert.set_yticks(list(range(0, args.right + 1, 2)))
 
-    plt.savefig(f'gen_acc-vs-L{args.norm}_ratio{args.ratio}.pdf')
+    plt.savefig(f'hide_acc-vs-L{args.norm}_ratio{args.ratio}.pdf')
 
 
 if __name__ == '__main__':
