@@ -138,6 +138,7 @@ class ScaleAttack(object):
             tgt_label: int = None,
             test_freq: int = 0,
             early_stop: bool = True,
+            verbose: bool = True,
     ) -> np.ndarray:
         """Hide a small image (maybe adversarial) into a large image.
 
@@ -154,6 +155,7 @@ class ScaleAttack(object):
             tgt_label: target label for the adv-example (for test only)
             test_freq: run full test per `test_freq` iterations, set 0 to disable it.
             early_stop: stop if loss converges.
+            verbose: output pbar
 
         Returns:
             np.ndarray: final large attack image
@@ -180,7 +182,7 @@ class ScaleAttack(object):
 
         # Start attack
         prev_loss = np.inf
-        with trange(step, desc=f'ScaleAdv-Hide ({mode})') as pbar:
+        with trange(step, desc=f'ScaleAdv-Hide ({mode})', disable=not verbose) as pbar:
             for i in pbar:
                 # forward
                 att = self.tanh_to_img(var)
@@ -217,10 +219,19 @@ class ScaleAttack(object):
                     pred = self.predict(att, scale=True, pooling=True, n=nb_samples)
                     for y in [y_src, y_tgt]:
                         print(f'Test {y}: {np.mean(pred == y):.2%}')
-                    # F.to_pil_image(att[0].cpu().detach()).save(f'ADV-{i:03d}.png')
 
-                # early stop
+                # smart early stop
+                # NOTE: right now we use pred from inp, maybe the pred from full-test is a better choice.
                 if early_stop and i % EARLY_STOP_ITER == 0:
+                    # run test
+                    pred = self.predict(att, scale=True, pooling=True, n=nb_samples)
+                    # targeted attack
+                    if tgt_label is not None and np.mean(pred == tgt_label) > 0.99:
+                        break
+                    # untargeted attack
+                    if src_label is not None and np.mean(pred == src_label) < 0.01:
+                        break
+                    # loss converge
                     if total_loss > prev_loss * EARLY_STOP_THRESHOLD:
                         break
                     prev_loss = total_loss
