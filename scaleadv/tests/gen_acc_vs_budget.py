@@ -31,7 +31,6 @@ def get_dataset_by_ratio(ratio: int, nb_data: Optional[int] = None):
 
 class AccBudget(object):
     # PGD params
-    NORM = 2
     STEP = 30
     BIG_STEP = 100
     NB_DATA = 100
@@ -44,13 +43,15 @@ class AccBudget(object):
         self.tag = tag
         self.saved_results = defaultdict(list)
 
-    def eval_ratio_eps(self, ratio: int, eps: int, defense: str = 'none', mode: str = None,
+    def eval_ratio_eps(self, ratio: int, norm: str, eps: int, defense: str = 'none', mode: str = None,
                        dump: bool = True, load: bool = False):
-        fname = f'eval-dataset.{ratio}.{eps:03d}.{defense}.{mode}.pkl'
+        norm_tag = f'{norm}.' if norm == 'inf' else ''
+        fname = f'eval-dataset.{ratio}.{norm_tag}{eps:03d}.{defense}.{mode}.pkl'
         if load:
             if os.path.exists(fname):
                 print(fname)
                 return pickle.load(open(fname, 'rb'))
+            print('File Not Exist:', fname)
             return None
 
         # Load data
@@ -80,21 +81,30 @@ class AccBudget(object):
         # Get art's proxy
         classify = PyTorchClassifier(class_net, nn.CrossEntropyLoss(), INPUT_SHAPE_NP, NUM_CLASSES, clip_values=(0, 1))
 
-        # Get art's attack
-        eps_step = 2.5 * eps / self.STEP
+        # Set art's attack params
+        norm = NORM[norm]
         targeted = self.target is not None
-        adv_attack = IndirectPGD(classify, self.NORM, eps, eps_step, self.STEP, targeted=targeted, verbose=False)
+        _eps = eps if norm == 2 else eps / 255.
+        _iter = self.STEP
+        _step = 2.5 * _eps / _iter
+
+        # Get art's attack
+        adv_attack = IndirectPGD(classify, norm, _eps, _step, _iter, targeted=targeted, verbose=False)
+
+        # Set scaling's attack params
+        if norm == 2:
+            _eps = _eps * ratio
+            _iter = self.BIG_STEP
+            _step = 30. * _eps / _iter
 
         # Get scaling attack
         scl_attack = ScaleAttack(scale_net, class_net, pooling)
-        big_eps = eps * ratio
-        big_eps_step = big_eps * 30. / self.BIG_STEP
-        attack_args = dict(norm=self.NORM, eps=big_eps, eps_step=big_eps_step, max_iter=self.BIG_STEP,
-                           targeted=targeted, batch_size=NUM_SAMPLES_PROXY, verbose=False)
+        attack_args = dict(norm=norm, eps=_eps, eps_step=_step, max_iter=_iter, targeted=targeted,
+                           batch_size=NUM_SAMPLES_PROXY, verbose=False)
 
         # Eval all data
         e = Evaluator(scale_net, class_net, pooling_args, nb_samples=nb_samples)
-        desc = f'Evaluate (ratio {ratio}, eps {eps}, defense {defense})'
+        desc = f'Evaluate (ratio {ratio}, norm {norm}, eps {eps}, defense {defense})'
         data = []
         with tqdm(loader, desc=desc) as pbar:
             for i, (src, y) in enumerate(pbar):
@@ -119,13 +129,15 @@ class AccBudget(object):
 
     def get_acc(self, data: List, img_field: str = 'SRC', y_field: str = 'Y'):
         cnt = [stat['Y'] == scipy.stats.mode(stat[img_field][y_field])[0] for stat in data]
-        acc = sum(cnt) / len(data) * 100
-        return acc
+        acc = sum(cnt) / len(cnt) * 100
+        l2 = [stat[img_field]['L-2'].item() for stat in data]
+        pert = sum(l2) / len(l2)
+        return acc.item(), pert
 
     def collect(self, data: List, eps: int, tag: str, plot: bool = True):
         # Compute acc
-        self.saved_results['ADV'].append((eps, self.get_acc(data, 'ADV', 'Y')))
-        self.saved_results['ATT'].append((eps, self.get_acc(data, 'ATT', tag)))
+        self.saved_results['ADV'].append((eps, *self.get_acc(data, 'ADV', 'Y')))
+        self.saved_results['ATT'].append((eps, *self.get_acc(data, 'ATT', tag)))
         if plot:
             self.plot(tag)
         for f in ['ADV', 'ATT']:
@@ -145,28 +157,37 @@ class AccBudget(object):
 
 def plot_all():
     defenses = {'none': 'Y', 'median': 'Y_MED', 'random': 'Y_RND'}
-    plt.figure(constrained_layout=True)
+    fig, ax_acc = plt.subplots(constrained_layout=True)
+    if args.norm == 'inf':
+        ax_pert = ax_acc.twinx()
 
     for defense, tag in defenses.items():
         tester = AccBudget(class_net, args.target, lib='cv', algo='linear', tag='TEST')
         for eps in range(args.left, args.right, args.step):
             mode = 'cheap' if defense == 'random' else None
-            d = tester.eval_ratio_eps(args.ratio, eps=eps, defense=defense, mode=mode, dump=False, load=True)
+            d = tester.eval_ratio_eps(args.ratio, args.norm, eps=eps, defense=defense, mode=mode, dump=False, load=True)
             if d is not None and len(d) == 100:
                 tester.collect(d, eps, tag, plot=False)
         # plot adv
         if defense == 'none':
-            eps, acc = zip(*tester.saved_results['ADV'])
-            plt.plot(eps, acc, marker='o', markersize=3, label='PGD Attack')
-        # plot att
-        eps, acc = zip(*tester.saved_results['ATT'])
-        plt.plot(eps, acc, marker='o', markersize=3, label=f'Scale-Adv Attack ({defense})')
+            eps, acc, pert = zip(*tester.saved_results['ADV'])
+            ax_acc.plot(eps, acc, marker='o', markersize=4, lw=2, label='PGD Attack')
+            if args.norm == 'inf':
+                ax_pert.plot(eps, pert, ls=':', lw=2)
 
-    plt.ylim(-5, 65)
-    plt.legend()
-    plt.xticks(list(range(0, args.right + 1, 2)))
-    plt.yticks(list(range(0, 61, 5)))
-    plt.savefig('gen_acc-vs-L2.pdf')
+        # plot att
+        eps, acc, pert = zip(*tester.saved_results['ATT'])
+        pert = [x / args.ratio for x in pert]
+        ax_acc.plot(eps, acc, marker='o', markersize=3, label=f'Scale-Adv Attack ({defense})')
+        if args.norm == 'inf':
+            ax_pert.plot(eps, pert, ls=':', lw=2)
+
+    ax_acc.set_ylim(-5, 65)
+    fig.legend(bbox_to_anchor=(1, 1), bbox_transform=ax_acc.transAxes)
+    ax_acc.set_xticks(list(range(0, args.right + 1, 2)))
+    ax_acc.set_yticks(list(range(0, 61, 5)))
+
+    plt.savefig(f'gen_acc-vs-L{args.norm}.pdf')
 
 
 if __name__ == '__main__':
@@ -183,6 +204,7 @@ if __name__ == '__main__':
     p.add_argument('--ratio', type=int, choices=(2, 3, 4, 5, 6))
     p.add_argument('--defense', type=str)
     # Attack args
+    p.add_argument('--norm', default='2', type=str)
     p.add_argument('-l', '--left', default=1, type=int)
     p.add_argument('-r', '--right', default=26, type=int)
     p.add_argument('-s', '--step', default=1, type=int)
@@ -203,6 +225,7 @@ if __name__ == '__main__':
     tester = AccBudget(class_net, args.target, lib='cv', algo='linear', tag='TEST')
     for eps in range(args.left, args.right, args.step):
         mode = 'cheap' if args.defense == 'random' else None
-        d = tester.eval_ratio_eps(args.ratio, eps=eps, defense=args.defense, mode=mode, dump=True, load=args.load)
+        d = tester.eval_ratio_eps(args.ratio, norm=args.norm, eps=eps, defense=args.defense, mode=mode, dump=True,
+                                  load=args.load)
         tag = {'random': 'Y_RND', 'median': 'Y_MED', 'none': 'Y'}
         tester.collect(d, eps, tag[args.defense])
