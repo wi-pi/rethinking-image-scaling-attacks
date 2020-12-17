@@ -27,6 +27,14 @@ def resize_to_224x(img: Image.Image, scale: int = 0, square: bool = False):
     return img.resize((w, h))
 
 
+def set_ccs_font(fontsize=None):
+    import matplotlib as mpl
+    mpl.rcParams['font.sans-serif'] = "Linux Libertine"
+    mpl.rcParams['font.family'] = "sans-serif"
+    if fontsize:
+        mpl.rcParams['font.size'] = fontsize
+
+
 class Evaluator(object):
     DIFF_FIELDS = ['Y', 'Y_MED', 'Y_RND', 'L-INF', 'L-2', 'PSNR', 'SSIM', 'MS-SSIM']
 

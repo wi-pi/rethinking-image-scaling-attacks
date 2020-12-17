@@ -167,6 +167,18 @@ class MedianPool2d(Pool2d):
         return x
 
 
+class MinPool2d(MedianPool2d):
+
+    def _pool(self, x: torch.Tensor, *args, **kwargs):
+        return self._unfold(x).min(dim=-1)[0]
+
+
+class MaxPool2d(MedianPool2d):
+
+    def _pool(self, x: torch.Tensor, *args, **kwargs):
+        return self._unfold(x).max(dim=-1)[0]
+
+
 class RandomPool2d(Pool2d):
     dev = torch.device('cpu')
     cache = None
