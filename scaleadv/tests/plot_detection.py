@@ -1,11 +1,13 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
+import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from scaleadv.defenses.detection import Unscaling, MinimumFilter
 from scaleadv.tests.gen_acc_vs_budget import get_dataset_by_ratio
 from scaleadv.tests.scale_adv import *
+from scaleadv.tests.utils import set_ccs_font
 
 # Params
 RATIO = 3
@@ -85,4 +87,5 @@ det = [
     Unscaling(scale_down, scale_up, pooling),
     MinimumFilter(),
 ]
+set_ccs_font(15)
 plot(det[1])
