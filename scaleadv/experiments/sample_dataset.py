@@ -37,7 +37,7 @@ from tqdm import tqdm, trange
 from scaleadv.datasets.imagenet import create_dataset
 
 STORE = Path('static/datasets/imagenet-ratio')
-DUMP = 'data-count.pkl'
+DUMP = Path('static/meta/data-count.pkl')
 INPUT_SIZE = 224
 
 RATIO_INTERVALS = [  # [l, r)
@@ -95,6 +95,7 @@ def copy_data(root: Path, data: ImageFolder, split: Dict):
 
 
 if __name__ == '__main__':
+    os.makedirs(DUMP.parent, exist_ok=True)
     dataset = create_dataset(transform=None)
     counter = count_ratio(dataset, load=True)
     split = split_ratio(counter)
