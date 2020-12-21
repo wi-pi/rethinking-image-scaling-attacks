@@ -4,7 +4,7 @@ import torch
 import torchvision.transforms.functional as F
 from scaling.ScalingApproach import ScalingApproach
 
-from scaleadv.models.layers import Pool2d, MinPool2d
+from scaleadv.defenses.prevention import Pooling, MinPooling
 
 
 class Detection(object):
@@ -32,7 +32,7 @@ class Detection(object):
 class Unscaling(Detection):
     name = 'unscaling'
 
-    def __init__(self, scale_down: ScalingApproach, scale_up: ScalingApproach, pooling: Pool2d):
+    def __init__(self, scale_down: ScalingApproach, scale_up: ScalingApproach, pooling: Pooling):
         self.scale_down = scale_down
         self.scale_up = scale_up
         self.pooling = pooling
@@ -56,7 +56,7 @@ class MinimumFilter(Detection):
     name = 'minimum filtering'
 
     def __init__(self):
-        self.min_pool = MinPool2d(kernel_size=2, stride=1, padding=(1, 0, 1, 0))
+        self.min_pool = MinPooling(kernel_size=2, stride=1, padding=(1, 0, 1, 0))
 
     def _reveal(self, x: np.ndarray) -> np.ndarray:
         # to (1, 3, h, w)[0, 1] tensor && pooling
