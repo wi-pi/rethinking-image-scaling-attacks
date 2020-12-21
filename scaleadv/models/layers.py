@@ -1,35 +1,33 @@
-from typing import Sequence
+from typing import Sequence, Type, TypeVar
 
+import numpy as np
 import torch
 import torch.nn as nn
 
 from scaleadv.datasets.imagenet import IMAGENET_STD, IMAGENET_MEAN
+from scaleadv.scaling import ScalingAPI
+
+T = TypeVar('T')
 
 
 class NormalizationLayer(nn.Module):
-    """A normalization layer prepends a neural network.
-    """
+    """A normalization layer prepends a neural network."""
+
     PRESET = {
         'imagenet': (IMAGENET_MEAN, IMAGENET_STD)
     }
 
     @classmethod
-    def preset(cls, name: str):
+    def preset(cls: Type[T], name: str) -> T:
         if name not in cls.PRESET:
             raise ValueError(f'Cannot find preset name "{name}".')
         mean, std = cls.PRESET[name]
         return cls(mean, std)
 
-    @staticmethod
-    def make_parameter(x: Sequence[float]):
-        x = torch.tensor(x, dtype=torch.float32)[None, :, None, None]
-        x = nn.Parameter(x, requires_grad=False)
-        return x
-
     def __init__(self, mean: Sequence[float], std: Sequence[float]):
         super(NormalizationLayer, self).__init__()
-        self.mean = self.make_parameter(mean)
-        self.std = self.make_parameter(std)
+        self.register_buffer('mean', torch.tensor(mean)[None, :, None, None])
+        self.register_buffer('std', torch.tensor(std)[None, :, None, None])
 
     def forward(self, x: torch.Tensor):
         if x.ndimension() != 4:
@@ -39,3 +37,19 @@ class NormalizationLayer(nn.Module):
 
     def __repr__(self):
         return f'NormalizationLayer(mean={self.mean}, std={self.std})'
+
+
+class ScalingLayer(nn.Module):
+    """A simple layer that scales down/up the inputs."""
+
+    def __init__(self, cl: np.ndarray, cr: np.ndarray):
+        super(ScalingLayer, self).__init__()
+        self.register_buffer('cl', torch.tensor(cl))
+        self.register_buffer('cr', torch.tensor(cr))
+
+    @classmethod
+    def from_api(cls: Type[T], api: ScalingAPI) -> T:
+        return cls(api.cl, api.cr)
+
+    def forward(self, inp: torch.Tensor):
+        return self.cl @ inp @ self.cr
