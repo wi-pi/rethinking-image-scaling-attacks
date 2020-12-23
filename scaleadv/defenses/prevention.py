@@ -2,13 +2,14 @@
 This module implements prevention-based defenses as pooling layers.
 """
 from abc import abstractmethod, ABC
-from typing import Optional, Union, Tuple, TypeVar, Type
+from typing import Optional, Union, Tuple, TypeVar, Type, Dict, Any, List
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger
+from scipy import signal
 from torch.nn.modules.utils import _pair, _quadruple
 
 T = TypeVar('T')
@@ -56,12 +57,12 @@ class Pooling(nn.Module, ABC):
         return cls(pool.kernel_size, pool.stride, pool.padding, pool.mask)
 
     @classmethod
-    def auto(cls: Type[T], kernel_size: Union[int, Tuple[int, int]], mask: Optional[np.ndarray] = None) -> T:
+    def auto(cls: Type[T], kernel_size: Union[int, Tuple[int, int]], mask: Optional[np.ndarray] = None, **kwargs) -> T:
         """Return a pooling layer with auto determined parameters that fit the kernel size."""
         kh, kw = _pair(kernel_size)
         pt, pl = kh // 2, kw // 2
         pb, pr = kh - pt - 1, kw - pl - 1
-        return cls(kernel_size=(kh, kw), stride=1, padding=(pl, pr, pt, pb), mask=mask)
+        return cls(kernel_size=(kh, kw), stride=1, padding=(pl, pr, pt, pb), mask=mask, **kwargs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.pooling(x)
@@ -127,30 +128,89 @@ class MedianPooling(Pooling):
         return med
 
 
-class RandomPooling(Pooling):
-    """Replace each pixel by a random one of a window.
+class RandomPooling(Pooling, ABC):
+    """The base class for all random pooling based defenses.
 
-    TODO: generalize to other random distribution for torch.randint.
-    TODO: explore a more efficient implementation.
+    Replace each pixel by an (i.i.d) random one of a window.
+
+    Additional Args:
+        prob_kwargs: a dict containing args for generating the probability kernel.
+
+    Additional Properties:
+        required_prob_kwargs: required args in prob_kwargs.
+        prob_kernel: a tensor of shape kernel_size.
     """
+
+    required_prob_kwargs: List[str] = []
+
+    def __init__(self, *args, prob_kwargs: Optional[Dict[str, Any]] = None, **kwargs):
+        super(RandomPooling, self).__init__(*args, **kwargs)
+        logger.info(f'Prob kwargs: {prob_kwargs}')
+        self.prob_kwargs = self._check_prob_kwargs(prob_kwargs)
+        self.prob_kernel = self._prob_kernel_2d()
+
+    def _check_prob_kwargs(self, prob_kwargs: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        for req in self.required_prob_kwargs:
+            if req not in prob_kwargs:
+                raise ValueError(f'Parameter "{req}" required, but not found in {prob_kwargs}.')
+            setattr(self, req, prob_kwargs[req])
+        return prob_kwargs or {}
+
+    @abstractmethod
+    def _prob_kernel_1d(self, size) -> np.ndarray:
+        raise NotImplementedError
+
+    def _prob_kernel_2d(self) -> torch.Tensor:
+        k = list(map(self._prob_kernel_1d, self.kernel_size))
+        k = torch.tensor(np.outer(*k), dtype=torch.float32)
+        return k / k.sum()
+
+    def randint(self, low: int, high: int, size: Tuple[int, ...]) -> torch.Tensor:
+        a = np.arange(low, high)
+        p = self._prob_kernel_1d(len(a))
+        out = np.random.choice(a, size, p=p)
+        return torch.tensor(out, dtype=torch.long)
+
+    def _gen_idx(self, n, gap, shape, expand=False) -> torch.Tensor:
+        B, C, H, W = shape
+        # get index of valid pixels (kernel center)
+        idx = torch.arange(n)
+        idx = idx[:, None] if expand else idx
+        idx = idx + gap + self.randint(-gap, gap + 1, (B, H, W))
+        # duplicate along channel
+        idx = idx[:, None, ...].repeat(1, C, 1, 1).flatten()
+        return idx
 
     def pooling(self, x: torch.Tensor) -> torch.Tensor:
         in_shape = B, C, H, W = x.shape
-        # generate index
+        # generate indices
         idx_c = torch.arange(B * C)[:, None].repeat(1, H * W).flatten()
-        idx_h = self.gen_idx(H, self.padding[0], in_shape, expand=True)
-        idx_w = self.gen_idx(W, self.padding[2], in_shape, expand=False)
+        idx_h = self._gen_idx(H, self.padding[0], in_shape, expand=True)
+        idx_w = self._gen_idx(W, self.padding[2], in_shape, expand=False)
         # padding & take
         x = self.apply_padding(x)
         x = x.view(-1, *x.shape[2:])[idx_c, idx_h, idx_w].view(in_shape)
         return x
 
-    def gen_idx(self, n, gap, shape, expand=False):
-        B, C, H, W = shape
-        # get index of valid pixels (kernel center)
-        idx = torch.arange(n)
-        idx = idx[:, None] if expand else idx
-        idx = idx + gap + torch.randint(-gap, gap + 1, (B, H, W))
-        # duplicate along channel
-        idx = idx[:, None, ...].repeat(1, C, 1, 1).flatten()
-        return idx
+
+class RandomPoolingUniform(RandomPooling):
+    required_prob_kwargs = []
+
+    def _prob_kernel_1d(self, size) -> np.ndarray:
+        return np.ones(size) / size
+
+
+class RandomPoolingGaussian(RandomPooling):
+    required_prob_kwargs = ['std']
+
+    def _prob_kernel_1d(self, size) -> np.ndarray:
+        k = signal.windows.gaussian(size, self.std)
+        return k / k.sum()
+
+
+class RandomPoolingLaplacian(RandomPooling):
+    required_prob_kwargs = ['std']
+
+    def _prob_kernel_1d(self, size) -> np.ndarray:
+        k = signal.windows.general_gaussian(size, 0.5, self.std)
+        return k / k.sum()
