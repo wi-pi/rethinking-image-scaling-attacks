@@ -26,8 +26,8 @@ class NormalizationLayer(nn.Module):
 
     def __init__(self, mean: Sequence[float], std: Sequence[float]):
         super(NormalizationLayer, self).__init__()
-        self.register_buffer('mean', torch.tensor(mean)[None, :, None, None])
-        self.register_buffer('std', torch.tensor(std)[None, :, None, None])
+        self.register_buffer('mean', torch.tensor(mean, dtype=torch.float32)[:, None, None])
+        self.register_buffer('std', torch.tensor(std, dtype=torch.float32)[:, None, None])
 
     def forward(self, x: torch.Tensor):
         if x.ndimension() != 4:
@@ -44,8 +44,8 @@ class ScalingLayer(nn.Module):
 
     def __init__(self, cl: np.ndarray, cr: np.ndarray):
         super(ScalingLayer, self).__init__()
-        self.register_buffer('cl', torch.tensor(cl))
-        self.register_buffer('cr', torch.tensor(cr))
+        self.register_buffer('cl', torch.tensor(cl, dtype=torch.float32))
+        self.register_buffer('cr', torch.tensor(cr, dtype=torch.float32))
 
     @classmethod
     def from_api(cls: Type[T], api: ScalingAPI) -> T:

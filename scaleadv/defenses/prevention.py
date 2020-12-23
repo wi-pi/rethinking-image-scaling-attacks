@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from loguru import logger
 from torch.nn.modules.utils import _pair, _quadruple
 
 T = TypeVar('T')
@@ -45,7 +46,9 @@ class Pooling(nn.Module, ABC):
         self.kernel_size = _pair(kernel_size)
         self.stride = _pair(stride)
         self.padding = _quadruple(padding)  # convert to l, r, t, b
-        self.mask = 1 if mask is None else torch.tensor(mask).to(self.dev)
+        self.mask = 1 if mask is None else torch.tensor(mask).to(self.preferred_device)
+        logger.info(f'Created {self.__class__.__name__}: kernel {kernel_size}, stride {stride}, '
+                    f'padding {padding}, mask {mask is not None}.')
 
     @classmethod
     def like(cls: Type[T], pool: "Pooling") -> T:

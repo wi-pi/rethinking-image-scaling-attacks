@@ -41,7 +41,9 @@ def resnet50(robust: Optional[str] = None, normalize: bool = True):
         network = models.resnet50(pretrained=True)
 
     if normalize:
-        layer = NormalizationLayer.preset('imagenet')
+        name = 'imagenet'
+        layer = NormalizationLayer.preset(name)
         network = nn.Sequential(layer, network)
+        logger.info(f'Loading normalization layer for "{name}".')
 
     return network
