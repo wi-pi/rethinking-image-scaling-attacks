@@ -50,6 +50,7 @@ class ScalingAPI(object):
         self.lib = lib
         self.alg = alg
         self.backend = ScalingBackend.create(lib, alg)
+        self.ratio = self._get_ratio()
         self.cl, self.cr = self._get_matrix()
         self.mask = self._get_mask()
 
@@ -87,6 +88,10 @@ class ScalingAPI(object):
         x = x.transpose((2, 0, 1))
         x = x / 255
         return x
+
+    def _get_ratio(self) -> float:
+        r = min(x / y for x, y in zip(self.src_shape, self.tgt_shape))
+        return r
 
     def _get_matrix(self) -> Tuple[np.ndarray, np.ndarray]:
         def infer(size, width, height):

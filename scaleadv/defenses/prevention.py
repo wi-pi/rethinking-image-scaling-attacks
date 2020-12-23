@@ -97,15 +97,6 @@ class NonePooling(Pooling):
         return x
 
 
-class AveragePooling(Pooling):
-    """Replace each pixel by the average of a window."""
-
-    def pooling(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.apply_padding(x)
-        x = F.avg_pool2d(x, self.kernel_size, stride=1)
-        return x
-
-
 class MinPooling(Pooling):
     """Replace each pixel by the minimum of a window."""
 
@@ -113,7 +104,7 @@ class MinPooling(Pooling):
         return self._unfold(x).min(dim=-1).values
 
 
-class MaxPool2d(Pooling):
+class MaxPooling(Pooling):
     """Replace each pixel by the maximum of a window."""
 
     def pooling(self, x: torch.Tensor) -> torch.Tensor:
@@ -148,6 +139,7 @@ class RandomPooling(Pooling, ABC):
         logger.info(f'Prob kwargs: {prob_kwargs}')
         self.prob_kwargs = self._check_prob_kwargs(prob_kwargs)
         self.prob_kernel = self._prob_kernel_2d()
+        logger.info(f'Use prob kernel:\n {self.prob_kernel.numpy()}')
 
     def _check_prob_kwargs(self, prob_kwargs: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         for req in self.required_prob_kwargs:
@@ -214,3 +206,18 @@ class RandomPoolingLaplacian(RandomPooling):
     def _prob_kernel_1d(self, size) -> np.ndarray:
         k = signal.windows.general_gaussian(size, 0.5, self.std)
         return k / k.sum()
+
+
+str_to_pooling = {
+    'none': NonePooling,
+    'min': MinPooling,
+    'max': MaxPooling,
+    'median': MedianPooling,
+    'uniform': RandomPoolingUniform,
+    'gaussian': RandomPoolingGaussian,
+    'laplacian': RandomPoolingLaplacian,
+}
+
+
+def get_pooling(name: str) -> Type[Pooling]:
+    return str_to_pooling[name]
