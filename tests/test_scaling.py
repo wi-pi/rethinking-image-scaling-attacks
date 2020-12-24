@@ -97,7 +97,7 @@ class TestScalingLayer(object):
     @pytest.mark.parametrize('alg', alg_list)
     def test_scaling_layer(self, src_shape: ShapeType, tgt_shape: ShapeType, lib: ScalingLib, alg: ScalingAlg):
         # Generate random image
-        img = np.random.rand(3, *src_shape)
+        img = np.random.rand(3, *src_shape).astype(np.float32)
 
         # Normal scale
         api = ScalingAPI(src_shape, tgt_shape, lib, alg)

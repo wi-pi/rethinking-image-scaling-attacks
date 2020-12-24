@@ -71,7 +71,7 @@ class TestModelPerformance(object):
 
     @staticmethod
     def _get_classifier(model: str) -> PyTorchClassifier:
-        model = nn.Sequential(NormalizationLayer.preset('imagenet'), resnet50(model)).eval()
+        model = resnet50(model).eval()
         model = DataParallel(model).cuda()
         classifier = PyTorchClassifier(model, nn.CrossEntropyLoss(), (3, 224, 224), 1000, clip_values=(0, 1))
         return classifier
