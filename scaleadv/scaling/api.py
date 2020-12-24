@@ -33,7 +33,7 @@ class ScalingAPI(object):
     """
 
     def __init__(self, src_shape: ShapeType, tgt_shape: ShapeType,
-                 lib: Union[ScalingLib, str], alg: Union[ScalingAlg, str]):
+                 lib: Union[ScalingLib, str], alg: Union[ScalingAlg, str], verbose: bool = True):
         # Convert str to enums
         if isinstance(lib, str):
             lib = lib.upper()
@@ -54,8 +54,8 @@ class ScalingAPI(object):
         self.ratio = self._get_ratio()
         self.cl, self.cr = self._get_matrix()
         self.mask = self._get_mask()
-        logger.info(f'Create scaling api: src {src_shape}, tgt {tgt_shape}, lib {lib}, alg {alg}.')
-        
+        if verbose:
+            logger.info(f'Create scaling api: src {src_shape}, tgt {tgt_shape}, lib {lib}, alg {alg}.')
 
     def __call__(self, x: np.ndarray, shape: Optional[ShapeType] = None):
         self._check_input(x)

@@ -15,25 +15,6 @@ from scaleadv.models.layers import MedianPool2d, RandomPool2d
 from scaleadv.models.scaling import ScaleNet
 
 
-def resize_to_224x(img: Image.Image, scale: int = 0, square: bool = False):
-    w, h = img.size
-    if scale:
-        w = h = 224 * scale
-    else:
-        w = 224 * ceil(w / 224)
-        h = 224 * ceil(h / 224)
-    if square:
-        w = h = min(w, h)
-    return img.resize((w, h))
-
-
-def set_ccs_font(fontsize=None):
-    import matplotlib as mpl
-    mpl.rcParams['font.sans-serif'] = "Linux Libertine"
-    mpl.rcParams['font.family'] = "sans-serif"
-    if fontsize:
-        mpl.rcParams['font.size'] = fontsize
-
 
 class Evaluator(object):
     DIFF_FIELDS = ['Y', 'Y_MED', 'Y_RND', 'L-INF', 'L-2', 'PSNR', 'SSIM', 'MS-SSIM']

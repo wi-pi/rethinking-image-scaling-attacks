@@ -1,10 +1,8 @@
 from argparse import ArgumentParser
 
 import numpy as np
-import torch
 import torch.nn as nn
 import torchvision.transforms as T
-import torchvision.transforms.functional as F
 from art.attacks.evasion import ProjectedGradientDescentPyTorch as PGD
 from art.estimators.classification import PyTorchClassifier
 from loguru import logger
@@ -13,6 +11,7 @@ from scaleadv.attacks.core import ScaleAttack
 from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
 from scaleadv.defenses import POOLING_MAPS
+from scaleadv.evaluate import Evaluator
 from scaleadv.models import resnet50
 from scaleadv.models.resnet import IMAGENET_MODEL_PATH
 from scaleadv.scaling import ScalingAPI, ScalingLib, ScalingAlg
@@ -102,4 +101,6 @@ if __name__ == '__main__':
     else:
         raise NotImplementedError
 
-    F.to_pil_image(torch.tensor(att)[0]).save(f'{args.tag}.att.png')
+    # Evaluate
+    e = Evaluator(scaling_api, class_network)
+    e.eval(src, adv, att, y_src, y_adv, tag=f'test.{args.id}.{args.action}', show=True, save='.')

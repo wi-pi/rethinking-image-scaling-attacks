@@ -66,7 +66,7 @@ class ScaleAttack(object):
 
     @staticmethod
     def baseline(src: np.ndarray, inp: np.ndarray, tgt: np.ndarray) -> np.ndarray:
-        api = ScalingAPI(src.shape[-2:], tgt.shape[-2:], lib='cv', alg='area')
+        api = ScalingAPI(src.shape[-2:], tgt.shape[-2:], lib='cv', alg='area', verbose=False)
         eps = (tgt - inp)[0].transpose((1, 2, 0)) * 255
         eps = api.backend.scale(eps, src.shape[-2:]).transpose((2, 0, 1)) / 255
         out = np.clip(src + eps, 0, 1)
