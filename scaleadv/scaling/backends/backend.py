@@ -12,6 +12,10 @@ class ScalingLib(Enum):
     CV = 1
     PIL = 2
 
+    @classmethod
+    def names(cls):
+        return [x.name.lower() for x in cls]
+
 
 class ScalingAlg(Enum):
     NEAREST = 1
@@ -19,6 +23,10 @@ class ScalingAlg(Enum):
     CUBIC = 3
     LANCZOS = 4
     AREA = 5
+
+    @classmethod
+    def names(cls):
+        return [x.name.lower() for x in cls]
 
 
 class ScalingBackend(ABC):

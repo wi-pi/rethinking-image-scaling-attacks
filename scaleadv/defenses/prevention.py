@@ -208,7 +208,7 @@ class RandomPoolingLaplacian(RandomPooling):
         return k / k.sum()
 
 
-str_to_pooling = {
+POOLING_MAPS = {
     'none': NonePooling,
     'min': MinPooling,
     'max': MaxPooling,
@@ -217,7 +217,3 @@ str_to_pooling = {
     'gaussian': RandomPoolingGaussian,
     'laplacian': RandomPoolingLaplacian,
 }
-
-
-def get_pooling(name: str) -> Type[Pooling]:
-    return str_to_pooling[name]

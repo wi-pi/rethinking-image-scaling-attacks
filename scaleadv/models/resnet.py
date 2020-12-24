@@ -42,8 +42,8 @@ def resnet50(robust: Optional[str] = None, normalize: bool = True):
 
     if normalize:
         name = 'imagenet'
+        logger.info(f'Loading normalization layer for "{name}".')
         layer = NormalizationLayer.preset(name)
         network = nn.Sequential(layer, network)
-        logger.info(f'Loading normalization layer for "{name}".')
 
     return network

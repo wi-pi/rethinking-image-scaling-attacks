@@ -2,6 +2,7 @@ from typing import Optional, Union, Tuple
 
 import numpy as np
 import scipy.linalg as LA
+from loguru import logger
 
 from . import ShapeType, ScalingLib, ScalingAlg, ScalingBackend
 
@@ -53,6 +54,8 @@ class ScalingAPI(object):
         self.ratio = self._get_ratio()
         self.cl, self.cr = self._get_matrix()
         self.mask = self._get_mask()
+        logger.info(f'Create scaling api: src {src_shape}, tgt {tgt_shape}, lib {lib}, alg {alg}.')
+        
 
     def __call__(self, x: np.ndarray, shape: Optional[ShapeType] = None):
         self._check_input(x)
