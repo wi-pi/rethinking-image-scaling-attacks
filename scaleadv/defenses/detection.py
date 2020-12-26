@@ -1,10 +1,9 @@
 import numpy as np
 import piq
 import torch
-import torchvision.transforms.functional as F
-from scaling.ScalingApproach import ScalingApproach
 
-from scaleadv.defenses.prevention import Pooling, MinPooling
+from scaleadv.scaling import ScalingAPI
+from . import Pooling, MinPooling
 
 
 class Detection(object):
@@ -32,28 +31,27 @@ class Detection(object):
 class Unscaling(Detection):
     name = 'unscaling'
 
-    def __init__(self, scale_down: ScalingApproach, scale_up: ScalingApproach, pooling: Pooling):
+    def __init__(self, scale_down: ScalingAPI, scale_up: ScalingAPI, pooling: Pooling):
         self.scale_down = scale_down
         self.scale_up = scale_up
         self.pooling = pooling
 
     def _reveal(self, x: np.ndarray) -> np.ndarray:
         # to (1, 3, h, w)[0, 1] tensor && pooling
-        x = torch.as_tensor(x, dtype=torch.float32)
+        x = torch.as_tensor(x, dtype=torch.float32).cuda()
         x = self.pooling(x)
 
-        # from (1, 3, h, w)[0, 1] tensor to (h, w, 3)[0, 255] array && scale down && scale up
-        x = np.array(F.to_pil_image(x[0]))
-        x = self.scale_down.scale_image(x)
-        x = self.scale_up.scale_image(x)
+        # from (1, 3, h, w)[0, 1] tensor to (3, h, w)[0, 1] array && scale down && scale up
+        x = x[0].cpu().numpy()
+        x = self.scale_down(x)
+        x = self.scale_up(x)
 
-        # from (h, w, 3)[0, 255] array to (1, 3, h, w)[0, 1] array
-        x = F.to_tensor(x).numpy()[None, ...]
-        return x
+        # from (h, w, 3)[0, 1] array to (1, 3, h, w)[0, 1] array
+        return x[None, ...]
 
 
 class MinimumFilter(Detection):
-    name = 'minimum filtering'
+    name = 'minimum_filtering'
 
     def __init__(self):
         self.min_pool = MinPooling(kernel_size=2, stride=1, padding=(1, 0, 1, 0))

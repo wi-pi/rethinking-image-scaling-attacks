@@ -101,14 +101,14 @@ class MinPooling(Pooling):
     """Replace each pixel by the minimum of a window."""
 
     def pooling(self, x: torch.Tensor) -> torch.Tensor:
-        return self._unfold(x).min(dim=-1).values
+        return self.unfold(x).min(dim=-1).values
 
 
 class MaxPooling(Pooling):
     """Replace each pixel by the maximum of a window."""
 
     def pooling(self, x: torch.Tensor) -> torch.Tensor:
-        return self._unfold(x).max(dim=-1).values
+        return self.unfold(x).max(dim=-1).values
 
 
 class MedianPooling(Pooling):

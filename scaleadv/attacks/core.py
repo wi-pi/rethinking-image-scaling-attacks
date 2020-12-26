@@ -50,7 +50,7 @@ class ScaleAttack(object):
 
         # Init art's proxy
         full_net = FullNet(pooling_layer, self.scaling_layer, class_network)
-        kwargs = dict(loss=nn.CrossEntropyLoss(), nb_classes=1000, clip_values=(0, 1))
+        kwargs = dict(loss=nn.CrossEntropyLoss(), nb_classes=1000, clip_values=(0, 1), verbose=False)
         self.classifier_big = PyTorchClassifierFull(full_net, input_shape=(3,) + scaling_api.src_shape, **kwargs)
         self.smart_pooling = self.classifier_big.smart_pooling
 
