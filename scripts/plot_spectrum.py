@@ -2,15 +2,17 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
-from scaleadv.tests.utils import set_ccs_font
+from scaleadv.utils import set_ccs_font
 
 src = 'raw.png'
 att = {
-    'bad': './old_imgs/TEST.ScaleAttack.Common.att.png',
+    'bad': './testcases/scaling-attack/attack.png',
     'none': 'TEST.5000.generate.none.None.ATT.plain.big.png',
     'median': 'TEST.5000.generate.median.None.ATT.plain.big.png',
     'random': 'TEST.5000.generate.random.cheap.ATT.plain.big.png',
-    # 'hide-med': 'TEST.5000.hide.median.None.ATT.plain.big.png',
+    # 'none': 'test.5000.generate.none.att.none.big.png',
+    # 'median': 'test.5000.generate.median.att.none.big.png',
+    # 'random': 'test.5000.generate.uniform.att.none.big.png',
 }
 
 
@@ -64,9 +66,6 @@ if __name__ == '__main__':
     set_ccs_font(12)
     plot_low_pass('none')
     plot_low_pass('bad')
+    plot_low_pass('median')
+    plot_low_pass('random')
     plot_all()
-    # for tag, name in att.items():
-    #     plt.figure(figsize=(20, 5), tight_layout=True)
-    #     plot(src, 1, 2)
-    #     plot(name, 4, 3)
-    #     plt.savefig(f'det-{tag}.pdf')
