@@ -1,3 +1,5 @@
+import os
+
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -5,16 +7,23 @@ import numpy as np
 from scaleadv.utils import set_ccs_font
 
 src = 'raw.png'
-att = {
-    'bad': './testcases/scaling-attack/attack.png',
-    'none': 'TEST.5000.generate.none.None.ATT.plain.big.png',
-    'median': 'TEST.5000.generate.median.None.ATT.plain.big.png',
-    'random': 'TEST.5000.generate.random.cheap.ATT.plain.big.png',
-    # 'none': 'test.5000.generate.none.att.none.big.png',
-    # 'median': 'test.5000.generate.median.att.none.big.png',
-    # 'random': 'test.5000.generate.uniform.att.none.big.png',
-}
-
+attack = 'hide'
+if attack == 'hide':
+    att = {
+        'bad': './testcases/scaling-attack/attack.png',
+        'none': 'test.5000.hide.none.att.none.big.png',
+        'median': 'test.5000.hide.median.att.none.big.png',
+        'random': 'test.5000.hide.uniform.att.none.big.png',
+    }
+elif attack == 'generate':
+    att = {
+        'bad': './testcases/scaling-attack/attack.png',
+        'none': 'test.5000.generate.none.att.none.big.png',
+        'median': 'test.5000.generate.median.att.none.big.png',
+        'random': 'test.5000.generate.uniform.att.none.big.png',
+    }
+else:
+    raise NotImplementedError
 
 def plot(img, i, j):
     img_color = cv2.cvtColor(cv2.imread(img), cv2.COLOR_BGR2RGB)
@@ -44,7 +53,7 @@ def plot_all():
     pp('Scale-Adv Attack (none)', att['none'], 3)
     pp('Scale-Adv Attack (median)', att['median'], 4)
     pp('Scale-Adv Attack (random)', att['random'], 5)
-    plt.savefig('det-all.pdf')
+    plt.savefig(f'det-all.{attack}.pdf')
 
 
 def plot_low_pass(tag):
@@ -59,7 +68,7 @@ def plot_low_pass(tag):
         plt.subplot(1, len(ts), i + 1)
         plt.imshow(np.log(1 + x), 'gray', interpolation='none', extent=[-h, h, -w, w])
         plt.gca().set_title(f'Low Pass by Percentile: {t}%')
-    plt.savefig(f'det-lowpass-{tag}.pdf')
+    plt.savefig(f'det-lowpass-{tag}.{attack}.pdf')
 
 
 if __name__ == '__main__':
