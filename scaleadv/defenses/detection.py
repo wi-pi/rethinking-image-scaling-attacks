@@ -10,7 +10,7 @@ class Detection(object):
     name = 'detection'
 
     def score(self, x: np.ndarray):
-        y = self._reveal(x)
+        y = self.reveal(x)
         x, y = x * 255, y * 255
         mse = np.square(x - y).mean()
         ssim = piq.ssim(*map(torch.as_tensor, [x, y]), data_range=255.0).item()

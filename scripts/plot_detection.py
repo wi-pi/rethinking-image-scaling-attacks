@@ -5,22 +5,22 @@ import torch
 import torchvision.transforms as T
 from tqdm import tqdm
 
-from scaleadv.attacks.core import ScaleAttack
 from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
 from scaleadv.defenses import POOLING_MAPS
 from scaleadv.defenses.detection import Unscaling, MinimumFilter
-from scaleadv.evaluate.utils import ImageManager
+from scaleadv.evaluate.utils import ImageManager, DataManager
 from scaleadv.models import ScalingLayer
 from scaleadv.models.resnet import resnet50
 from scaleadv.scaling import ScalingAPI
-from scaleadv.utils import set_ccs_font
+
+# from scaleadv.utils import set_ccs_font
 
 # Params
 RATIO = 3
 ATTACK = 'generate'
 DEFENSE = 'none'
-EPS = 4 * RATIO
+EPS = 4
 ITER = 100
 EPS_STEP = 30. * EPS / ITER
 
@@ -34,15 +34,12 @@ src_size, inp_size = (224 * RATIO, 224 * RATIO), (224, 224)
 scale_down = ScalingAPI(src_size, inp_size, 'cv', 'linear')
 scale_up = ScalingAPI(inp_size, src_size, 'cv', 'linear')
 im = ImageManager(scale_down)
+dm = DataManager(scale_down)
 
 # Load networks
 scaling_layer = ScalingLayer.from_api(scale_down).cuda()
 pooling_layer = POOLING_MAPS[DEFENSE].auto(RATIO * 2 - 1, scale_down.mask).cuda()
 class_network = resnet50('2', normalize=True).eval().cuda()
-
-# Get scale attack
-attack = ScaleAttack(scale_down, pooling_layer, class_network)
-attack_args = dict(norm=2, eps=EPS, eps_step=EPS_STEP, max_iter=ITER, targeted=False, batch_size=128, verbose=False)
 
 
 def plot(det):
@@ -51,8 +48,10 @@ def plot(det):
     acc, rob = [], []
     with tqdm(id_list) as pb:
         for i in pb:
+            stat = dm.load_att(i, EPS, DEFENSE, ATTACK)
+            if stat is None or stat['src']['Y'] != dataset.targets[i]:
+                continue
             src, y = dataset[i]
-            # att = attack.generate(src, y, PGD, attack_args); im.save_att(i, EPS, DEFENSE, ATTACK, att)
             att = im.load_att(i, EPS, DEFENSE, ATTACK)
             score_src.append(det.score(src))
             score_att.append(det.score(att))
@@ -62,6 +61,7 @@ def plot(det):
             x = class_network(scaling_layer(pooling_layer(torch.tensor(att).cuda()))).argmax(1).cpu().item()
             rob.append(x == y)
             pb.set_postfix({'acc': np.mean(acc), 'rob': np.mean(rob)})
+        print(len(acc))
 
     # Eval
     fig, axes = plt.subplots(ncols=2, figsize=(8, 4), constrained_layout=True)
@@ -76,7 +76,7 @@ def plot(det):
 
     acc, rob = map(np.mean, [acc, rob])
     fig.suptitle(f'Compare {det.name.title()} Defense (acc = {acc:.2%}, rob = {rob:.2%})')
-    fig.savefig(f'det-{ATTACK.lower()}-{det.name}.pdf')
+    fig.savefig(f'det-{ATTACK}-{DEFENSE}-{det.name}.pdf')
 
 
 # Get detection
@@ -84,6 +84,6 @@ det = [
     Unscaling(scale_down, scale_up, pooling_layer),
     MinimumFilter(),
 ]
-set_ccs_font(15)
+# set_ccs_font(15)
 for d in det:
     plot(d)
