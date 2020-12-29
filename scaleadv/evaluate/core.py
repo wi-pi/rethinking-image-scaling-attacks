@@ -1,6 +1,6 @@
 import os
 from collections import OrderedDict
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import numpy as np
 import piq
@@ -19,10 +19,12 @@ class Evaluator(object):
     nb_samples = 100
     fields = ['Y', 'Y_MED', 'Y_RND', 'Linf', 'L2', 'MSE', 'SSIM']
 
-    def __init__(self, scaling_api: ScalingAPI, class_network: nn.Module):
+    def __init__(self, scaling_api: ScalingAPI, class_network: nn.Module, nb_samples: Optional[int] = None):
         # Init network
         self.scaling_layer = ScalingLayer.from_api(scaling_api).cuda()
         self.class_network = class_network
+        if nb_samples is not None:
+            self.nb_samples = nb_samples
 
         # Init test pooling
         args = (round(scaling_api.ratio) * 2 - 1, scaling_api.mask)
@@ -44,7 +46,7 @@ class Evaluator(object):
             pred = self.class_network(x).argmax(1).cpu()
         return pred.numpy()
 
-    def eval(self, src: np.ndarray, adv: np.ndarray, att: np.ndarray, y_src: int, y_adv: int,
+    def eval(self, src: np.ndarray, adv: np.ndarray, att: np.ndarray, y_src: int, y_adv: Optional[int] = None,
              tag: str = 'test', show: bool = False, save: str = ''):
         # Check inputs
         src = self._check_inputs(src).cuda()
@@ -68,14 +70,18 @@ class Evaluator(object):
 
         # Output
         if show:
+            if y_adv is None:
+                y_adv = self.class_network(adv).argmax(1).cpu().item()
             self.show(tag, stats, y_src, y_adv)
 
         if save:
             os.makedirs(save, exist_ok=True)
             self.save(save, tag, 'src', src_big)
             self.save(save, tag, 'adv', adv_inp, scaling=False)
-            self.save(save, tag, 'base', adv_big)
+            # self.save(save, tag, 'base', adv_big)
             self.save(save, tag, 'att', att)
+
+        return stats
 
     def eval_one(self, ref: torch.Tensor, x: torch.Tensor, scaling: bool) -> Dict[str, Any]:
         stats = OrderedDict({

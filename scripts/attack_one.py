@@ -6,6 +6,7 @@ import torchvision.transforms as T
 from art.attacks.evasion import ProjectedGradientDescentPyTorch as PGD
 from art.estimators.classification import PyTorchClassifier
 from loguru import logger
+from torch.nn import DataParallel
 
 from scaleadv.attacks.core import ScaleAttack
 from scaleadv.datasets import get_imagenet
@@ -73,7 +74,10 @@ if __name__ == '__main__':
     pooling_layer = cls.auto(round(scaling_api.ratio) * 2 - 1, scaling_api.mask).cuda()
 
     # Load network
-    class_network = resnet50(args.model, normalize=True).eval().cuda()
+    class_network = resnet50(args.model, normalize=True).eval()
+    if args.samples > 90:
+        class_network = DataParallel(class_network)
+    class_network = class_network.cuda()
 
     # Prepare adv attack
     classifier = PyTorchClassifier(class_network, nn.CrossEntropyLoss(), inp.shape[1:], 1000, clip_values=(0, 1))
@@ -92,9 +96,9 @@ if __name__ == '__main__':
     logger.info(f'Initial prediction: adv = {y_adv}.')
 
     # Scaling attack
-    attack = ScaleAttack(scaling_api, pooling_layer, class_network)
+    attack = ScaleAttack(scaling_api, pooling_layer, class_network, nb_samples=args.samples, verbose=True)
     if args.action == 'hide':
-        att = attack.hide(src, adv, y_src, y_adv, args.iter, args.lr, args.weight, args.samples)
+        att = attack.hide(src, adv, y_src, y_adv, args.iter, args.lr, args.weight)
     elif args.action == 'generate':
         attack_kwargs = dict(norm=args.norm, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step)
         att = attack.generate(src, y_src, PGD, attack_kwargs)
@@ -103,4 +107,4 @@ if __name__ == '__main__':
 
     # Evaluate
     e = Evaluator(scaling_api, class_network)
-    e.eval(src, adv, att, y_src, y_adv, tag=f'test.{args.id}.{args.action}', show=True, save='.')
+    e.eval(src, adv, att, y_src, y_adv, tag=f'test.{args.id}.{args.action}.{args.defense}', show=True, save='.')

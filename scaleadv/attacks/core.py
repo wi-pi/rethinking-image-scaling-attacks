@@ -42,16 +42,19 @@ class ScaleAttack(object):
         class_network: the final classification network.
     """
 
-    def __init__(self, scaling_api: ScalingAPI, pooling_layer: Pooling, class_network: nn.Module):
+    def __init__(self, scaling_api: ScalingAPI, pooling_layer: Pooling, class_network: nn.Module,
+                 nb_samples: int = 1, nb_flushes: int = 20, verbose=False):
         # Init network
         self.pooling_layer = pooling_layer
         self.scaling_layer = ScalingLayer.from_api(scaling_api).cuda()
         self.class_network = class_network
 
         # Init art's proxy
-        full_net = FullNet(pooling_layer, self.scaling_layer, class_network)
-        kwargs = dict(loss=nn.CrossEntropyLoss(), nb_classes=1000, clip_values=(0, 1), verbose=False)
-        self.classifier_big = PyTorchClassifierFull(full_net, input_shape=(3,) + scaling_api.src_shape, **kwargs)
+        full_net = FullNet(pooling_layer, self.scaling_layer, class_network).cuda()
+        self.classifier_big = PyTorchClassifierFull(
+            full_net, loss=nn.CrossEntropyLoss(), input_shape=(3,) + scaling_api.src_shape, nb_classes=1000,
+            clip_values=(0, 1), nb_samples=nb_samples, nb_flushes=nb_flushes, verbose=verbose
+        )
         self.smart_pooling = self.classifier_big.smart_pooling
 
     @staticmethod
@@ -73,8 +76,7 @@ class ScaleAttack(object):
         return out
 
     def hide(self, src: np.ndarray, tgt: np.ndarray, src_label: int, tgt_label: int,
-             max_iter: int = 100, lr: float = 0.01, weight: float = 2.0,
-             nb_sample: int = 20, verbose: bool = True) -> np.ndarray:
+             max_iter: int = 100, lr: float = 0.01, weight: float = 2.0, verbose: bool = True) -> np.ndarray:
         # Check inputs
         src = self._check_inputs(src).cuda()
         tgt = self._check_inputs(tgt).cuda()
@@ -85,10 +87,10 @@ class ScaleAttack(object):
         opt = torch.optim.Adam([var], lr=lr)
 
         with trange(max_iter, desc='Scaling Attack - Hide', disable=not verbose) as pbar:
-            for _ in pbar:
+            for i in pbar:
                 # forward
                 att = tanh_to_img(var)
-                att_pooling = self.classifier_big.smart_pooling(att, nb_sample)
+                att_pooling = self.classifier_big.smart_pooling(att)
                 inp = self.scaling_layer(att_pooling)
 
                 # loss
@@ -102,35 +104,31 @@ class ScaleAttack(object):
                 opt.step()
 
                 # test
-                pred = self.classifier_big.predict(att.detach().cpu().repeat(nb_sample, 1, 1, 1)).argmax(1)
-                acc_src = np.mean(pred == src_label)
-                acc_tgt = np.mean(pred == tgt_label)
                 pbar.set_postfix({
                     'src': f'{loss_src.cpu().item():.3f}',
                     'tgt': f'{loss_tgt.cpu().item():.3f}',
                     'tot': f'{loss_total.cpu().item():.3f}',
-                    f'pred-{src_label}': f'{acc_src:.2%}',
-                    f'pred-{tgt_label}': f'{acc_tgt:.2%}',
                 })
-                if acc_tgt > 0.99:
-                    break
+                if i % 20 == 0:
+                    n = att_pooling.shape[0]
+                    pred = self.classifier_big.predict(att.detach().cpu().repeat(n, 1, 1, 1)).argmax(1)
+                    acc_src = np.mean(pred == src_label)
+                    if acc_src < 0.01:
+                        break
 
         att = att.detach().cpu().numpy()
         return att
 
     def generate(self, src: np.ndarray, src_label: int,
-                 attack_cls: Type[ART_ATTACK], attack_kwargs: Dict[str, Any],
-                 nb_samples: int = 20) -> np.ndarray:
+                 attack_cls: Type[ART_ATTACK], attack_kwargs: Dict[str, Any]) -> np.ndarray:
         # Check inputs
         src = self._check_inputs(src)
 
         # Prepare Attack
+        attack_kwargs.setdefault('verbose', False)
         attack = attack_cls(self.classifier_big, **attack_kwargs)
-        prev_nb = self.smart_pooling.nb_samples
-        self.smart_pooling.nb_samples = nb_samples
 
         # Attack
         att = attack.generate(src, np.array([src_label]))
-        self.smart_pooling.nb_samples = prev_nb
 
         return att
