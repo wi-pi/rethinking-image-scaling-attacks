@@ -1,5 +1,3 @@
-import os
-
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,23 +5,24 @@ import numpy as np
 from scaleadv.utils import set_ccs_font
 
 src = 'raw.png'
-attack = 'hide'
+attack = 'generate'
 if attack == 'hide':
     att = {
         'bad': './testcases/scaling-attack/attack.png',
-        'none': 'test.5000.hide.none.att.none.big.png',
-        'median': 'test.5000.hide.median.att.none.big.png',
-        'random': 'test.5000.hide.uniform.att.none.big.png',
+        'none': './static/results/images/test.5000.hide.none.att.none.big.png',
+        'median': './static/results/images/test.5000.hide.median.att.none.big.png',
+        'random': './static/results/images/test.5000.hide.uniform.att.none.big.png',
     }
 elif attack == 'generate':
     att = {
         'bad': './testcases/scaling-attack/attack.png',
-        'none': 'test.5000.generate.none.att.none.big.png',
-        'median': 'test.5000.generate.median.att.none.big.png',
-        'random': 'test.5000.generate.uniform.att.none.big.png',
+        'none': './static/results/images/test.5000.generate.none.att.none.big.png',
+        'median': './static/results/images/test.5000.generate.median.att.none.big.png',
+        'random': './static/results/images/test.5000.generate.uniform.att.none.big.png',
     }
 else:
     raise NotImplementedError
+
 
 def plot(img, i, j):
     img_color = cv2.cvtColor(cv2.imread(img), cv2.COLOR_BGR2RGB)

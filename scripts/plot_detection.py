@@ -1,3 +1,5 @@
+import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -27,7 +29,8 @@ EPS_STEP = 30. * EPS / ITER
 # Load data
 transform = T.Compose([Align(224, RATIO), T.ToTensor(), lambda x: np.array(x)[None, ...]])
 dataset = get_imagenet(f'val_{RATIO}', transform)
-id_list = list(range(0, len(dataset), len(dataset) // 100))[:100]
+id_list = pickle.load(open(f'static/meta/valid_ids.model_2.scale_{RATIO}.pkl', 'rb'))
+id_list = sorted(set(id_list[::2] + id_list[::5]))
 
 # Load scaling
 src_size, inp_size = (224 * RATIO, 224 * RATIO), (224, 224)

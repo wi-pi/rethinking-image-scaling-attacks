@@ -1,3 +1,5 @@
+import os
+import pickle
 from argparse import ArgumentParser
 
 import numpy as np
@@ -86,7 +88,9 @@ if __name__ == '__main__':
     _('-l', '--left', default=1, type=int)
     _('-r', '--right', default=21, type=int)
     _('-s', '--step', default=1, type=int)
+    _('-g', '--gpus', default='', type=str)
     args = p.parse_args()
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
 
     # Load data
     transform = T.Compose([Align(224, args.scale), T.ToTensor(), lambda x: np.array(x)[None, ...]])
@@ -101,13 +105,15 @@ if __name__ == '__main__':
     class_network = resnet50(args.model, normalize=True).eval().cuda()
 
     # Load utils
-    id_list = list(range(0, len(dataset), len(dataset) // 100))[:100]
+    id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_{args.scale}.pkl', 'rb'))
+    id_list = sorted(id_list[::15])  # for scale 2
+    # id_list = sorted(set(id_list[::2] + id_list[::5]))  # for scale 3
     eps_list = list(range(args.left, args.right, args.step))
     im = ImageManager(scaling_api)
     dm = DataManager(scaling_api)
     e = Evaluator(scaling_api, class_network, nb_samples=40)
 
     if args.action == 'adv':
-        run_adv(load=True)
+        run_adv(load=False)
     else:
         run_att(args.action)

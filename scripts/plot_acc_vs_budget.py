@@ -1,3 +1,4 @@
+import pickle
 from argparse import ArgumentParser
 from collections import defaultdict
 
@@ -39,7 +40,9 @@ if __name__ == '__main__':
     class_network = resnet50(args.model, normalize=True).eval().cuda()
 
     # Load utils
-    id_list = list(range(0, len(dataset), len(dataset) // 100))[:100]
+    id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_{args.scale}.pkl', 'rb'))
+    id_list = sorted(id_list[::15])  # for scale 2
+    # id_list = sorted(set(id_list[::2] + id_list[::5]))  # for scale 3
     eps_list = list(range(args.left, args.right, args.step))
     dm = DataManager(scaling_api)
     get_adv_data = lambda e: [dm.load_adv(i, e) for i in id_list]
@@ -94,4 +97,4 @@ if __name__ == '__main__':
     plt.ylim(-2, 95)
     plt.yticks(list(range(0, 91, 5)))
     plt.legend()
-    plt.savefig(f'acc-{args.eval}.pdf')
+    plt.savefig(f'acc-{args.eval}.{args.scale}.pdf')
