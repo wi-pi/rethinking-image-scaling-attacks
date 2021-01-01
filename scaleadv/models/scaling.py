@@ -1,33 +1,19 @@
-import numpy as np
-import torch
 import torch.nn as nn
 
-from scaleadv.models.layers import Pool2d
+from scaleadv.defenses.prevention import Pooling
+from .layers import ScalingLayer
 
 
-class ScaleNet(nn.Module):
+class FullNet(nn.Module):
 
-    def __init__(self, cl: np.ndarray, cr: np.ndarray):
-        super(ScaleNet, self).__init__()
-        self.cl = nn.Parameter(torch.as_tensor(cl.copy(), dtype=torch.float32), requires_grad=False)
-        self.cr = nn.Parameter(torch.as_tensor(cr.copy(), dtype=torch.float32), requires_grad=False)
-
-    def forward(self, inp: torch.Tensor):
-        return self.cl @ inp @ self.cr
-
-
-class FullScaleNet(nn.Module):
-
-    def __init__(self, scale_net: ScaleNet, class_net: nn.Module, pooling: Pool2d, n: int):
-        super(FullScaleNet, self).__init__()
-        self.scale_net = scale_net
-        self.class_net = class_net
+    def __init__(self, pooling: Pooling, scaling: ScalingLayer, backbone: nn.Module):
+        super(FullNet, self).__init__()
         self.pooling = pooling
-        self.n = n
+        self.scaling = scaling
+        self.backbone = backbone
 
     def forward(self, x):
-        if self.n > 0:
-            x = self.pooling(x, n=self.n)
-        x = self.scale_net(x)
-        y = self.class_net(x)
+        x = self.pooling(x)
+        x = self.scaling(x)
+        y = self.backbone(x)
         return y
