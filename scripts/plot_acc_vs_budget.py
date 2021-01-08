@@ -12,6 +12,7 @@ from scaleadv.datasets.transforms import Align
 from scaleadv.evaluate.utils import DataManager
 from scaleadv.models.resnet import IMAGENET_MODEL_PATH, resnet50
 from scaleadv.scaling import ScalingLib, ScalingAlg, ScalingAPI
+from scaleadv.utils import set_ccs_font, get_id_list_by_ratio
 
 if __name__ == '__main__':
     p = ArgumentParser()
@@ -41,8 +42,7 @@ if __name__ == '__main__':
 
     # Load utils
     id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_{args.scale}.pkl', 'rb'))
-    id_list = sorted(id_list[::15])  # for scale 2
-    # id_list = sorted(set(id_list[::2] + id_list[::5]))  # for scale 3
+    id_list = get_id_list_by_ratio(id_list, args.scale)
     eps_list = list(range(args.left, args.right, args.step))
     dm = DataManager(scaling_api)
     get_adv_data = lambda e: [dm.load_adv(i, e) for i in id_list]
@@ -87,6 +87,7 @@ if __name__ == '__main__':
             pert_list[f'att_{defense}'] = eps_list
 
     # plot
+    set_ccs_font(12)
     plt.figure(tight_layout=True)
     plt.plot(eps_list, acc_list['adv'], marker='o', ms=2, label='PGD Attack')
     plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=2, label='Scale-Adv Attack (none)')

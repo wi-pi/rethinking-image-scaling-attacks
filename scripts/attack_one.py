@@ -98,7 +98,7 @@ if __name__ == '__main__':
     # Scaling attack
     attack = ScaleAttack(scaling_api, pooling_layer, class_network, nb_samples=args.samples, verbose=True)
     if args.action == 'hide':
-        att = attack.hide(src, adv, y_src, y_adv, args.iter, args.lr, args.weight)
+        att = attack.hide(src, adv, y_src, y_adv, args.iter, args.lr, args.weight, verbose=True)
     elif args.action == 'generate':
         attack_kwargs = dict(norm=args.norm, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step)
         att = attack.generate(src, y_src, PGD, attack_kwargs)

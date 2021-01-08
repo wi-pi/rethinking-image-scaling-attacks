@@ -84,6 +84,9 @@ class Evaluator(object):
         return stats
 
     def eval_one(self, ref: torch.Tensor, x: torch.Tensor, scaling: bool) -> Dict[str, Any]:
+        ref = torch.clamp(ref, 0, 1)
+        x = torch.clamp(x, 0, 1)
+
         stats = OrderedDict({
             # pred (normal)
             'Y': self.predict(x, pooling='none', scaling=scaling).item(),
