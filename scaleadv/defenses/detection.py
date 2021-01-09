@@ -51,7 +51,7 @@ class Unscaling(Detection):
 
 
 class MinimumFilter(Detection):
-    name = 'minimum_filtering'
+    name = 'minimum-filtering'
 
     def __init__(self):
         self.min_pool = MinPooling(kernel_size=2, stride=1, padding=(1, 0, 1, 0))

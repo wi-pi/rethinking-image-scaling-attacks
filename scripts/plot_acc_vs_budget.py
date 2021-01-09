@@ -87,7 +87,7 @@ if __name__ == '__main__':
             pert_list[f'att_{defense}'] = eps_list
 
     # plot
-    set_ccs_font(12)
+    set_ccs_font(14)
     plt.figure(tight_layout=True)
     plt.plot(eps_list, acc_list['adv'], marker='o', ms=2, label='PGD Attack')
     plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=2, label='Scale-Adv Attack (none)')
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     plt.plot(pert_list['att_uniform'], acc_list['att_uniform'], marker='o', ms=2, label='Scale-Adv Attack (random)')
     plt.xlim(-0.5, args.right + 1)
     plt.xticks(list(range(0, args.right + 1, 2)))
-    plt.ylim(-2, 95)
-    plt.yticks(list(range(0, 91, 5)))
+    plt.ylim(-2, 102)
+    plt.yticks(list(range(0, 101, 10)))
     plt.legend()
     plt.savefig(f'acc-{args.eval}.{args.scale}.pdf')

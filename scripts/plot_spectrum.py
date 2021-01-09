@@ -44,11 +44,11 @@ def plot_all():
         h, w = h // 2, w // 2
         ax = plt.subplot(2, 5, i + 5)
         plt.imshow(img_spectrum, 'gray', interpolation='none', extent=[-h, h, -w, w])
-        ax.text(0.5, -0.1, tag, size=12, ha="center", transform=ax.transAxes)
+        ax.text(0.5, -0.25, tag, size=14, ha="center", transform=ax.transAxes)
 
-    plt.figure(figsize=(25, 10), tight_layout=True)
+    plt.figure(figsize=(15, 6), tight_layout=True)
     pp('Benign', src, 1)
-    pp('Image-Scale Attack', att['bad'], 2)
+    pp('Image-Scaling Attack', att['bad'], 2)
     pp('Scale-Adv Attack (none)', att['none'], 3)
     pp('Scale-Adv Attack (median)', att['median'], 4)
     pp('Scale-Adv Attack (random)', att['random'], 5)
@@ -70,10 +70,30 @@ def plot_low_pass(tag):
     plt.savefig(f'det-lowpass-{tag}.{attack}.pdf')
 
 
+def plot_low_pass_all():
+    def pp(name, pos):
+        img_c1 = cv2.imread(name, 0)
+        img_c2 = np.fft.fftshift(np.fft.fft2(img_c1))
+        h, w = [v // 2 for v in img_c1.shape]
+        ts = [85, 90, 95, 98, 99]
+        for i, t in enumerate(ts):
+            x = np.abs(img_c2.copy())
+            x[x < np.percentile(x, t)] = 0
+            plt.subplot(2, len(ts), pos + i)
+            plt.imshow(np.log(1 + x), 'gray', interpolation='none', extent=[-h, h, -w, w])
+            plt.gca().set_title(f'Percentile: {t}%')
+
+    plt.figure(figsize=(15, 6), tight_layout=True)
+    pp(att['bad'], 1)
+    pp(att['none'], 6)
+    plt.savefig(f'det-lowpass-all.{attack}.pdf')
+
+
 if __name__ == '__main__':
-    set_ccs_font(12)
-    plot_low_pass('none')
-    plot_low_pass('bad')
-    plot_low_pass('median')
-    plot_low_pass('random')
-    plot_all()
+    set_ccs_font(14)
+    # plot_low_pass('none')
+    # plot_low_pass('bad')
+    # plot_low_pass('median')
+    # plot_low_pass('random')
+    # plot_all()
+    plot_low_pass_all()

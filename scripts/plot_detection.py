@@ -6,6 +6,7 @@ import seaborn as sns
 import torch
 import torchvision.transforms as T
 from tqdm import tqdm
+import sys
 
 from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
@@ -15,14 +16,15 @@ from scaleadv.evaluate.utils import ImageManager, DataManager
 from scaleadv.models import ScalingLayer
 from scaleadv.models.resnet import resnet50
 from scaleadv.scaling import ScalingAPI
+from scaleadv.utils import set_ccs_font
 
-# from scaleadv.utils import set_ccs_font
-
+"""
+python -m scripts.plot_detection [generate|hide] [none|median|uniform] 4
+"""
 # Params
 RATIO = 3
-ATTACK = 'generate'
-DEFENSE = 'none'
-EPS = 4
+ATTACK, DEFENSE, EPS = sys.argv[1:]
+EPS = int(EPS)
 ITER = 100
 EPS_STEP = 30. * EPS / ITER
 
@@ -78,8 +80,8 @@ def plot(det):
         axes[i].legend()
 
     acc, rob = map(np.mean, [acc, rob])
-    fig.suptitle(f'Compare {det.name.title()} Defense (acc = {acc:.2%}, rob = {rob:.2%})')
-    fig.savefig(f'det-{ATTACK}-{DEFENSE}-{det.name}.pdf')
+    fig.suptitle(f'Compare {det.name.title()} Defense (accuracy {acc:.2%}, robustness {rob:.2%})')
+    fig.savefig(f'det-{ATTACK}-{DEFENSE}-{det.name}.{EPS}.pdf')
 
 
 # Get detection
@@ -87,6 +89,6 @@ det = [
     Unscaling(scale_down, scale_up, pooling_layer),
     MinimumFilter(),
 ]
-# set_ccs_font(15)
+set_ccs_font(15)
 for d in det:
     plot(d)

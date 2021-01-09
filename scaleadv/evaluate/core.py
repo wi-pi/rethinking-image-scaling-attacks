@@ -78,7 +78,7 @@ class Evaluator(object):
             os.makedirs(save, exist_ok=True)
             self.save(save, tag, 'src', src_big)
             self.save(save, tag, 'adv', adv_inp, scaling=False)
-            # self.save(save, tag, 'base', adv_big)
+            self.save(save, tag, 'base', adv_big)
             self.save(save, tag, 'att', att)
 
         return stats
