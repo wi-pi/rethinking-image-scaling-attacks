@@ -18,8 +18,8 @@ class ImageManager(object):
     adv_fmt = '{i}.adv.eps_{eps}.{type}.png'.format
     att_fmt = '{i}.{attack}.eps_{eps}.pool_{defense}.{type}.png'.format
 
-    def __init__(self, api: ScalingAPI):
-        self.path = self.root / f'{round(api.ratio)}.{api.lib.name.lower()}.{api.alg.name.lower()}'
+    def __init__(self, api: ScalingAPI, tag: str = ''):
+        self.path = self.root / f'{round(api.ratio)}.{api.lib.name.lower()}.{api.alg.name.lower()}{tag}'
         os.makedirs(self.path, exist_ok=True)
         logger.info(f'Saving images to path "{self.path}".')
 
@@ -65,8 +65,8 @@ class DataManager(object):
     adv_fmt = '{i}.eps_{eps}.pkl'.format
     att_fmt = '{i}.{attack}.eps_{eps}.pool_{defense}.pkl'.format
 
-    def __init__(self, api: ScalingAPI):
-        self.path = self.root / f'{round(api.ratio)}.{api.lib.name.lower()}.{api.alg.name.lower()}'
+    def __init__(self, api: ScalingAPI, tag: str = ''):
+        self.path = self.root / f'{round(api.ratio)}.{api.lib.name.lower()}.{api.alg.name.lower()}{tag}'
         os.makedirs(self.path, exist_ok=True)
         logger.info(f'Saving results to path "{self.path}".')
 

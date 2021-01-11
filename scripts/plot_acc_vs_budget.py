@@ -14,39 +14,25 @@ from scaleadv.models.resnet import IMAGENET_MODEL_PATH, resnet50
 from scaleadv.scaling import ScalingLib, ScalingAlg, ScalingAPI
 from scaleadv.utils import set_ccs_font, get_id_list_by_ratio
 
-if __name__ == '__main__':
-    p = ArgumentParser()
-    _ = p.add_argument
-    # Input args
-    _('eval', type=str, choices=('hide', 'generate'), help='which attack to evaluate')
-    _('--model', default='none', type=str, choices=IMAGENET_MODEL_PATH.keys(), help='use robust model, optional')
-    # Scaling args
-    _('--lib', default='cv', type=str, choices=ScalingLib.names(), help='scaling libraries')
-    _('--alg', default='linear', type=str, choices=ScalingAlg.names(), help='scaling algorithms')
-    _('--scale', default=3, type=int, help='set a fixed scale ratio, unset to use the original size')
-    # Adversarial attack args
-    _('-l', '--left', default=1, type=int)
-    _('-r', '--right', default=21, type=int)
-    _('-s', '--step', default=1, type=int)
-    args = p.parse_args()
 
+def get_acc_pert(lib, alg, scale, eva):
     # Load data
-    transform = T.Compose([Align(224, args.scale), T.ToTensor(), lambda x: np.array(x)[None, ...]])
-    dataset = get_imagenet(f'val_{args.scale}', transform)
+    transform = T.Compose([Align(224, scale), T.ToTensor(), lambda x: np.array(x)[None, ...]])
+    dataset = get_imagenet(f'val_{scale}', transform)
 
     # Load networks
-    src_shape = (224 * args.scale, 224 * args.scale)
+    src_shape = (224 * scale, 224 * scale)
     inp_shape = (224, 224)
-    scaling_api = ScalingAPI(src_shape, inp_shape, args.lib, args.alg)
+    scaling_api = ScalingAPI(src_shape, inp_shape, lib, alg)
     class_network = resnet50(args.model, normalize=True).eval().cuda()
 
     # Load utils
-    id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_{args.scale}.pkl', 'rb'))
-    id_list = get_id_list_by_ratio(id_list, args.scale)
+    id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_{scale}.pkl', 'rb'))
+    id_list = get_id_list_by_ratio(id_list, scale)
     eps_list = list(range(args.left, args.right, args.step))
     dm = DataManager(scaling_api)
     get_adv_data = lambda e: [dm.load_adv(i, e) for i in id_list]
-    get_att_data = lambda e, d: [dm.load_att(i, e, d, args.eval) for i in id_list]
+    get_att_data = lambda e, d: [dm.load_att(i, e, d, eva) for i in id_list]
 
     acc_list = defaultdict(list)
     pert_list = defaultdict(list)
@@ -77,25 +63,75 @@ if __name__ == '__main__':
                     pert.append(adv_stat['adv']['L2'])
                 else:
                     acc.append(scipy.stats.mode(att_stat['att'][field])[0].item() == dataset.targets[i])
-                    pert.append(att_stat['att']['L2'] / args.scale)
+                    pert.append(att_stat['att']['L2'] / scale)
 
             acc, pert = map(np.mean, [acc, pert])
             acc_list[f'att_{defense}'].append(acc * 100)
             pert_list[f'att_{defense}'].append(pert)
 
-        if args.eval == 'generate':
+        if eva == 'generate':
             pert_list[f'att_{defense}'] = eps_list
 
-    # plot
-    set_ccs_font(14)
-    plt.figure(tight_layout=True)
-    plt.plot(eps_list, acc_list['adv'], marker='o', ms=2, label='PGD Attack')
-    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=2, label='Scale-Adv Attack (none)')
-    plt.plot(pert_list['att_median'], acc_list['att_median'], marker='o', ms=2, label='Scale-Adv Attack (median)')
-    plt.plot(pert_list['att_uniform'], acc_list['att_uniform'], marker='o', ms=2, label='Scale-Adv Attack (random)')
+    return acc_list, pert_list, eps_list
+
+
+def plot_all():
+    acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, args.eval)
+    set_ccs_font(22)
+    plt.figure(figsize=(6, 6), constrained_layout=True)
+    plt.plot(eps_list, acc_list['adv'], marker='o', ms=4, lw=3, label='PGD Attack')
+    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=3, label='Scale-Adv (none)')
+    plt.plot(pert_list['att_median'], acc_list['att_median'], marker='o', ms=4, lw=3, label='Scale-Adv (median)')
+    plt.plot(pert_list['att_uniform'], acc_list['att_uniform'], marker='o', ms=4, lw=3, label='Scale-Adv (random)')
     plt.xlim(-0.5, args.right + 1)
-    plt.xticks(list(range(0, args.right + 1, 2)))
+    plt.xticks(list(range(0, args.right + 1, 2)), fontsize=24)
     plt.ylim(-2, 102)
-    plt.yticks(list(range(0, 101, 10)))
+    plt.yticks(list(range(0, 101, 10)), fontsize=24)
     plt.legend()
-    plt.savefig(f'acc-{args.eval}.{args.scale}.pdf')
+    # plt.savefig(f'acc-{args.eval}.{args.scale}.pdf')
+    plt.savefig('test.pdf')
+
+
+def plot_hide_generate():
+    # init
+    set_ccs_font(22)
+    plt.figure(figsize=(6, 6), constrained_layout=True)
+
+    # hide
+    acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, 'hide')
+    plt.plot(eps_list, acc_list['adv'], marker='o', ms=4, lw=3, label='PGD Attack')
+    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=3, label='Scale-Adv (Hide)')
+
+    # generate
+    acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, 'generate')
+    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=3, label='Scale-Adv (Generate)')
+
+    # final
+    plt.xlim(-0.5, args.right + 1)
+    plt.xticks(list(range(0, args.right + 1, 2)), fontsize=24)
+    plt.ylim(-2, 102)
+    plt.yticks(list(range(0, 101, 10)), fontsize=24)
+    plt.legend()
+    plt.savefig(f'test.pdf')
+
+
+if __name__ == '__main__':
+    p = ArgumentParser()
+    _ = p.add_argument
+    # Input args
+    _('eval', type=str, choices=('hide', 'generate', 'all'), help='which attack to evaluate')
+    _('--model', default='none', type=str, choices=IMAGENET_MODEL_PATH.keys(), help='use robust model, optional')
+    # Scaling args
+    _('--lib', default='cv', type=str, choices=ScalingLib.names(), help='scaling libraries')
+    _('--alg', default='linear', type=str, choices=ScalingAlg.names(), help='scaling algorithms')
+    _('--scale', default=3, type=int, help='set a fixed scale ratio, unset to use the original size')
+    # Adversarial attack args
+    _('-l', '--left', default=1, type=int)
+    _('-r', '--right', default=21, type=int)
+    _('-s', '--step', default=1, type=int)
+    args = p.parse_args()
+
+    if args.eval == 'all':
+        plot_hide_generate()
+    else:
+        plot_all()

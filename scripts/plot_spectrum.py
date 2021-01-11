@@ -6,19 +6,20 @@ from scaleadv.utils import set_ccs_font
 
 src = 'raw.png'
 attack = 'generate'
+root = './static/images/cv.linear.3'
 if attack == 'hide':
     att = {
         'bad': './testcases/scaling-attack/attack.png',
-        'none': './static/results/images/test.5000.hide.none.att.none.big.png',
-        'median': './static/results/images/test.5000.hide.median.att.none.big.png',
-        'random': './static/results/images/test.5000.hide.uniform.att.none.big.png',
+        'none': f'{root}/test.5000.hide.none.att.none.big.png',
+        'median': f'{root}/test.5000.hide.median.att.none.big.png',
+        'random': f'{root}/test.5000.hide.uniform.att.none.big.png',
     }
 elif attack == 'generate':
     att = {
         'bad': './testcases/scaling-attack/attack.png',
-        'none': './static/results/images/test.5000.generate.none.att.none.big.png',
-        'median': './static/results/images/test.5000.generate.median.att.none.big.png',
-        'random': './static/results/images/test.5000.generate.uniform.att.none.big.png',
+        'none': f'{root}/test.5000.generate.none.att.none.big.png',
+        'median': f'{root}/test.5000.generate.median.att.none.big.png',
+        'random': f'{root}/test.5000.generate.uniform.att.none.big.png',
     }
 else:
     raise NotImplementedError
@@ -40,18 +41,20 @@ def plot_all():
         img_spectrum = np.fft.fftshift(np.fft.fft2(cv2.imread(name, 0)))
         img_spectrum = np.log(1 + np.abs(img_spectrum))
         h, w = img_spectrum.shape
-        plt.subplot(2, 5, i), plt.imshow(img_spatial, interpolation='none', extent=[0, h, 0, w])
+        ax = plt.subplot(2, 3, i)
+        plt.imshow(img_spatial, interpolation='none', extent=[0, h, 0, w])
         h, w = h // 2, w // 2
-        ax = plt.subplot(2, 5, i + 5)
+        plt.subplot(2, 3, i + 3)
         plt.imshow(img_spectrum, 'gray', interpolation='none', extent=[-h, h, -w, w])
-        ax.text(0.5, -0.25, tag, size=14, ha="center", transform=ax.transAxes)
+        # ax.text(0.5, -0.25, tag, size=14, va="center", transform=ax.transAxes)
+        ax.text(0.5, 1.1, tag, size=16, ha="center", transform=ax.transAxes)
 
-    plt.figure(figsize=(15, 6), tight_layout=True)
-    pp('Benign', src, 1)
-    pp('Image-Scaling Attack', att['bad'], 2)
-    pp('Scale-Adv Attack (none)', att['none'], 3)
-    pp('Scale-Adv Attack (median)', att['median'], 4)
-    pp('Scale-Adv Attack (random)', att['random'], 5)
+    plt.figure(figsize=(9, 6), tight_layout=True)
+    # pp('Benign', src, 1)
+    # pp('Image-Scaling Attack', att['bad'], 2)
+    pp('Scale-Adv Attack (none)', att['none'], 1)
+    pp('Scale-Adv Attack (median)', att['median'], 2)
+    pp('Scale-Adv Attack (random)', att['random'], 3)
     plt.savefig(f'det-all.{attack}.pdf')
 
 
@@ -75,7 +78,7 @@ def plot_low_pass_all():
         img_c1 = cv2.imread(name, 0)
         img_c2 = np.fft.fftshift(np.fft.fft2(img_c1))
         h, w = [v // 2 for v in img_c1.shape]
-        ts = [85, 90, 95, 98, 99]
+        ts = [90, 95, 99]
         for i, t in enumerate(ts):
             x = np.abs(img_c2.copy())
             x[x < np.percentile(x, t)] = 0
@@ -83,17 +86,17 @@ def plot_low_pass_all():
             plt.imshow(np.log(1 + x), 'gray', interpolation='none', extent=[-h, h, -w, w])
             plt.gca().set_title(f'Percentile: {t}%')
 
-    plt.figure(figsize=(15, 6), tight_layout=True)
+    plt.figure(figsize=(9, 6), tight_layout=True)
     pp(att['bad'], 1)
-    pp(att['none'], 6)
+    pp(att['none'], 4)
     plt.savefig(f'det-lowpass-all.{attack}.pdf')
 
 
 if __name__ == '__main__':
-    set_ccs_font(14)
+    set_ccs_font(16)
     # plot_low_pass('none')
     # plot_low_pass('bad')
     # plot_low_pass('median')
     # plot_low_pass('random')
-    # plot_all()
-    plot_low_pass_all()
+    plot_all()
+    # plot_low_pass_all()

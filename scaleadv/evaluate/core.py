@@ -56,15 +56,15 @@ class Evaluator(object):
         # Generate reference images
         src_big = src
         src_inp = self.scaling_layer(src)
-        adv_big = ScaleAttack.baseline(src_big.cpu().numpy(), src_inp.cpu().numpy(), adv.cpu().numpy())
-        adv_big = self._check_inputs(adv_big).cuda()
+        # adv_big = ScaleAttack.baseline(src_big.cpu().numpy(), src_inp.cpu().numpy(), adv.cpu().numpy())
+        # adv_big = self._check_inputs(adv_big).cuda()
         adv_inp = adv
 
         # Evaluate
         stats = OrderedDict({
             'src': self.eval_one(ref=src_big, x=src_big, scaling=True),
             'adv': self.eval_one(ref=src_inp, x=adv_inp, scaling=False),
-            'base': self.eval_one(ref=src_big, x=adv_big, scaling=True),
+            # 'base': self.eval_one(ref=src_big, x=adv_big, scaling=True),
             'att': self.eval_one(ref=src_big, x=att, scaling=True),
         })
 
@@ -78,7 +78,7 @@ class Evaluator(object):
             os.makedirs(save, exist_ok=True)
             self.save(save, tag, 'src', src_big)
             self.save(save, tag, 'adv', adv_inp, scaling=False)
-            self.save(save, tag, 'base', adv_big)
+            # self.save(save, tag, 'base', adv_big)
             self.save(save, tag, 'att', att)
 
         return stats

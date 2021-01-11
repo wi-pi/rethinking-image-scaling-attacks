@@ -27,6 +27,7 @@ ATTACK, DEFENSE, EPS = sys.argv[1:]
 EPS = int(EPS)
 ITER = 100
 EPS_STEP = 30. * EPS / ITER
+FIELD = {'none': 'Y', 'median': 'Y_MED', 'uniform': 'Y_RND'}[DEFENSE]
 
 # Load data
 transform = T.Compose([Align(224, RATIO), T.ToTensor(), lambda x: np.array(x)[None, ...]])
@@ -61,10 +62,10 @@ def plot(det):
             score_src.append(det.score(src))
             score_att.append(det.score(att))
             # test acc
-            x = class_network(scaling_layer(torch.tensor(src).cuda())).argmax(1).cpu().item()
-            acc.append(x == y)
-            x = class_network(scaling_layer(pooling_layer(torch.tensor(att).cuda()))).argmax(1).cpu().item()
-            rob.append(x == y)
+            # x = class_network(scaling_layer(torch.tensor(src).cuda())).argmax(1).cpu().item()
+            acc.append(y == stat['src']['Y'])
+            # x = class_network(scaling_layer(pooling_layer(torch.tensor(att).cuda()))).argmax(1).cpu().item()
+            rob.append(y == stat['att'][FIELD])
             pb.set_postfix({'acc': np.mean(acc), 'rob': np.mean(rob)})
         print(len(acc))
 

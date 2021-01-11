@@ -11,6 +11,8 @@ def get_id_list_by_ratio(id_list, ratio):
         return id_list[::15]
     if ratio == 3:
         return id_list[::2] + id_list[::5]
+    if ratio == 4:
+        return id_list
     if ratio == 5:
         return id_list
     raise NotImplementedError
