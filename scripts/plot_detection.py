@@ -22,7 +22,7 @@ from scaleadv.utils import set_ccs_font
 python -m scripts.plot_detection [generate|hide] [none|median|uniform] 4
 """
 # Params
-RATIO = 3
+RATIO = 4
 ATTACK, DEFENSE, EPS = sys.argv[1:]
 EPS = int(EPS)
 ITER = 100
@@ -82,7 +82,7 @@ def plot(det):
 
     acc, rob = map(np.mean, [acc, rob])
     fig.suptitle(f'Compare {det.name.title()} Defense (accuracy {acc:.2%}, robustness {rob:.2%})')
-    fig.savefig(f'det-{ATTACK}-{DEFENSE}-{det.name}.{EPS}.pdf')
+    fig.savefig(f'det-{ATTACK}-{DEFENSE}-{det.name}.{EPS}.{RATIO}.pdf')
 
 
 # Get detection

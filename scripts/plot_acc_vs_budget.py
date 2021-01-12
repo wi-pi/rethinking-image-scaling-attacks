@@ -88,8 +88,7 @@ def plot_all():
     plt.ylim(-2, 102)
     plt.yticks(list(range(0, 101, 10)), fontsize=24)
     plt.legend()
-    # plt.savefig(f'acc-{args.eval}.{args.scale}.pdf')
-    plt.savefig('test.pdf')
+    plt.savefig(f'acc-{args.eval}.{args.scale}.pdf')
 
 
 def plot_hide_generate():
