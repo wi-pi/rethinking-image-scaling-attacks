@@ -98,12 +98,12 @@ def plot_hide_generate():
 
     # hide
     acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, 'hide')
-    plt.plot(eps_list, acc_list['adv'], marker='o', ms=4, lw=3, label='PGD Attack')
+    plt.plot(eps_list, acc_list['adv'], marker='o', ms=4, lw=3, c='k', label='PGD Attack')
     plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=3, label='Scale-Adv (Hide)')
 
     # generate
     acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, 'generate')
-    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=3, label='Scale-Adv (Generate)')
+    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=3, ls='--', label='Scale-Adv (Generate)')
 
     # final
     plt.xlim(-0.5, args.right + 1)
@@ -111,7 +111,7 @@ def plot_hide_generate():
     plt.ylim(-2, 102)
     plt.yticks(list(range(0, 101, 10)), fontsize=24)
     plt.legend()
-    plt.savefig(f'test.pdf')
+    plt.savefig(f'acc-all.{args.lib}.{args.alg}.{args.scale}.pdf')
 
 
 if __name__ == '__main__':

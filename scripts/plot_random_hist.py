@@ -68,5 +68,5 @@ if __name__ == '__main__':
         lap_hist = torch.histc(lap, bins=100, min=-1, max=1).numpy()
         plt.plot(xs, lap_hist / lap_hist.sum(), '--', lw=1, label=rf'Laplace (b={mad:.3f}×{s:.1f})')
     plt.legend(loc='upper left')
-    plt.title(rf'Random Filtering (μ̂={med:.3f}, b̂={mad:.3f})')
+    plt.title(rf'Random Filtering ($\hat{{\mu}}$={med:.3f}, $\hat{{b}}$={mad:.3f})')
     plt.savefig(f'{name}.pdf')

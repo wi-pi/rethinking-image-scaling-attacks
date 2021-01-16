@@ -46,8 +46,7 @@ INPUT_SIZE = 224
 RATIO_INTERVALS = [  # [l, r)
     (2, 3),
     (3, 4),
-    (4, 5),
-    (5, 10),
+    (4, 10),
 ]
 COUNTER_CACHE = Path('./static/meta/ratio_counter.pkl')
 CounterType = Dict[int, List[int]]

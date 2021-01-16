@@ -25,10 +25,10 @@ from scaleadv.utils import get_id_list_by_ratio
 def run_adv(load=True):
     logger.info('Running Adversarial attack.')
     classifier = PyTorchClassifier(class_network, nn.CrossEntropyLoss(), (3,) + inp_shape, 1000, clip_values=(0, 1))
-    max_iter = 30
+    max_iter = 100
 
     for eps in eps_list:
-        attack = PGD(classifier, 2, eps, eps * 2.5 / max_iter, max_iter, verbose=False)
+        attack = PGD(classifier, 2, eps, eps * 10 / max_iter, max_iter, verbose=False)
         for i in tqdm(id_list, desc=f'Adversarial Attack (eps {eps})'):
             src, y = dataset[i]
             inp = scaling_api(src[0])[None, ...]
@@ -62,7 +62,7 @@ def run_att(action: str):
             elif action == 'generate':
                 _eps = eps * args.scale  # NOTE: we use the enlarged L2 eps as the recorded eps
                 _iter = 100
-                _eps_step = _eps * 30 / _iter
+                _eps_step = _eps * 10 / _iter
                 attack_kwargs = dict(norm=2, eps=_eps, eps_step=_eps_step, max_iter=_iter, verbose=False)
                 att = attack.generate(src, y_src, PGD, attack_kwargs)
             else:

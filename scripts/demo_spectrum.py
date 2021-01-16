@@ -7,8 +7,8 @@ from scaleadv.utils import set_ccs_font
 img = {
     'source': 'testcases/scaling-attack/source.png',
     'attack': 'testcases/scaling-attack/attack.png',
-    'hide': 'static/images/pil.linear.3/test.5000.hide.none.att.none.big.png',
-    'generate': 'static/images/pil.linear.3/test.5000.generate.none.att.none.big.png',
+    'gen-area': 'static/images/robust.3/area.generate.none.att.big.png',
+    'gen-pil': 'static/images/robust.3/pil.generate.none.att.big.png',
 }
 
 

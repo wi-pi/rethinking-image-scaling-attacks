@@ -78,7 +78,7 @@ def plot_low_pass_all():
         img_c1 = cv2.imread(name, 0)
         img_c2 = np.fft.fftshift(np.fft.fft2(img_c1))
         h, w = [v // 2 for v in img_c1.shape]
-        ts = [90, 95, 99]
+        ts = [70, 80, 90]
         for i, t in enumerate(ts):
             x = np.abs(img_c2.copy())
             x[x < np.percentile(x, t)] = 0
@@ -99,4 +99,4 @@ if __name__ == '__main__':
     # plot_low_pass('median')
     # plot_low_pass('random')
     plot_all()
-    # plot_low_pass_all()
+    plot_low_pass_all()

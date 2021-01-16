@@ -1,12 +1,11 @@
 import pickle
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-import torch
 import torchvision.transforms as T
 from tqdm import tqdm
-import sys
 
 from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
@@ -14,9 +13,8 @@ from scaleadv.defenses import POOLING_MAPS
 from scaleadv.defenses.detection import Unscaling, MinimumFilter
 from scaleadv.evaluate.utils import ImageManager, DataManager
 from scaleadv.models import ScalingLayer
-from scaleadv.models.resnet import resnet50
 from scaleadv.scaling import ScalingAPI
-from scaleadv.utils import set_ccs_font
+from scaleadv.utils import set_ccs_font, get_id_list_by_ratio
 
 """
 python -m scripts.plot_detection [generate|hide] [none|median|uniform] 4
@@ -33,7 +31,7 @@ FIELD = {'none': 'Y', 'median': 'Y_MED', 'uniform': 'Y_RND'}[DEFENSE]
 transform = T.Compose([Align(224, RATIO), T.ToTensor(), lambda x: np.array(x)[None, ...]])
 dataset = get_imagenet(f'val_{RATIO}', transform)
 id_list = pickle.load(open(f'static/meta/valid_ids.model_2.scale_{RATIO}.pkl', 'rb'))
-id_list = sorted(set(id_list[::2] + id_list[::5]))
+id_list = get_id_list_by_ratio(id_list, RATIO)
 
 # Load scaling
 src_size, inp_size = (224 * RATIO, 224 * RATIO), (224, 224)
@@ -45,7 +43,6 @@ dm = DataManager(scale_down)
 # Load networks
 scaling_layer = ScalingLayer.from_api(scale_down).cuda()
 pooling_layer = POOLING_MAPS[DEFENSE].auto(RATIO * 2 - 1, scale_down.mask).cuda()
-class_network = resnet50('2', normalize=True).eval().cuda()
 
 
 def plot(det):
@@ -62,15 +59,13 @@ def plot(det):
             score_src.append(det.score(src))
             score_att.append(det.score(att))
             # test acc
-            # x = class_network(scaling_layer(torch.tensor(src).cuda())).argmax(1).cpu().item()
             acc.append(y == stat['src']['Y'])
-            # x = class_network(scaling_layer(pooling_layer(torch.tensor(att).cuda()))).argmax(1).cpu().item()
             rob.append(y == stat['att'][FIELD])
             pb.set_postfix({'acc': np.mean(acc), 'rob': np.mean(rob)})
         print(len(acc))
 
     # Eval
-    fig, axes = plt.subplots(ncols=2, figsize=(8, 4), constrained_layout=True)
+    fig, axes = plt.subplots(ncols=2, figsize=(6, 3), constrained_layout=True)
     for i, name in enumerate(['MSE', 'SSIM']):
         ss, sa = [list(zip(*arr))[i] for arr in [score_src, score_att]]
         sns.distplot(ss, kde=False, label='Benign', ax=axes[i])
@@ -81,7 +76,7 @@ def plot(det):
         axes[i].legend()
 
     acc, rob = map(np.mean, [acc, rob])
-    fig.suptitle(f'Compare {det.name.title()} Defense (accuracy {acc:.2%}, robustness {rob:.2%})')
+    fig.suptitle(f'{det.name.title()} Defense (accuracy {acc:.2%}, robustness {rob:.2%})')
     fig.savefig(f'det-{ATTACK}-{DEFENSE}-{det.name}.{EPS}.{RATIO}.pdf')
 
 
@@ -90,6 +85,6 @@ det = [
     Unscaling(scale_down, scale_up, pooling_layer),
     MinimumFilter(),
 ]
-set_ccs_font(15)
-for d in det:
+set_ccs_font(14)
+for d in det[:1]:
     plot(d)
