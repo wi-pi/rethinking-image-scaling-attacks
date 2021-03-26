@@ -86,8 +86,8 @@ if __name__ == '__main__':
     norm, eps, max_iter = args.norm, args.eps, args.step
     eps_step = eps * 10 / max_iter
     logger.info(f'Loading PGD attack: norm {norm}, eps {eps:.3f}, eps_step {eps_step:.3f}, max_iter {max_iter}.')
-    adv_attack = PGD(classifier, norm, eps, eps_step, max_iter, verbose=False)
-    adv = adv_attack.generate(inp, np.array([y_src]))
+    adv_attack = PGD(classifier, norm, eps, eps_step, max_iter, targeted=True, verbose=False)
+    adv = adv_attack.generate(inp, np.eye(1000, dtype=int)[[99]])
 
     # Initial test
     y_inp = classifier.predict(inp).argmax(1).item()

@@ -17,12 +17,11 @@ from scaleadv.scaling import ScalingAPI
 from scaleadv.utils import set_ccs_font, get_id_list_by_ratio
 
 """
-python -m scripts.plot_detection [generate|hide] [none|median|uniform] 4
+python -m scripts.plot_detection [generate|hide] [none|median|uniform] [ratio] [eps]
 """
 # Params
-RATIO = 4
-ATTACK, DEFENSE, EPS = sys.argv[1:]
-EPS = int(EPS)
+ATTACK, DEFENSE, RATIO, EPS = sys.argv[1:]
+RATIO, EPS = map(int, [RATIO, EPS])
 ITER = 100
 EPS_STEP = 30. * EPS / ITER
 FIELD = {'none': 'Y', 'median': 'Y_MED', 'uniform': 'Y_RND'}[DEFENSE]
@@ -73,7 +72,7 @@ def plot(det):
         axes[i].set_xlabel(name)
         if name == 'SSIM':
             axes[i].set_xlim(-0.05, 1.05)
-        axes[i].legend()
+        axes[i].legend(frameon=False, borderaxespad=0)
 
     acc, rob = map(np.mean, [acc, rob])
     fig.suptitle(f'{det.name.title()} Defense (accuracy {acc:.2%}, robustness {rob:.2%})')

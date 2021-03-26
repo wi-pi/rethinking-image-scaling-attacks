@@ -25,14 +25,14 @@ def plot(label, tag, i, j):
     h, w = h // 2, w // 2
     plt.subplot(2, 2, j)
     plt.imshow(np.log(1 + np.abs(img_c3)), 'gray', interpolation='none', extent=[-h, h, -w, w])
-    ax.text(0.5, 1.1, label, size=16, ha="center", transform=ax.transAxes)
+    ax.text(0.5, 1.1, label, size=56, ha="center", transform=ax.transAxes)
 
 
 if __name__ == '__main__':
-    set_ccs_font(16)
-    plt.figure(figsize=(6, 6), tight_layout=True)
-    plot('Scale-Adv Attack (Hide)', 'hide', 1, 3)
-    plot('Scale-Adv Attack (Generate)', 'generate', 2, 4)
-    # plot('Benign Image', 'source', 1, 3)
-    # plot('Attack Image', 'attack', 2, 4)
-    plt.savefig('test.pdf')
+    set_ccs_font(56)
+    plt.figure(figsize=(24, 24), tight_layout=True)
+    # plot('Scale-Adv Attack (Hide)', 'hide', 1, 3)
+    # plot('Scale-Adv Attack (Generate)', 'generate', 2, 4)
+    plot('Benign Image', 'source', 1, 3)
+    plot('Attack Image', 'attack', 2, 4)
+    plt.savefig('test.jpg', quality=60)
