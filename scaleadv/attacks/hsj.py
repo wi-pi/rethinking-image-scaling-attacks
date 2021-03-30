@@ -24,6 +24,7 @@ predictions. It is an advanced version of the Boundary attack.
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import logging
+import types
 from typing import Optional, Tuple, Union, TYPE_CHECKING
 
 import numpy as np
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class HopSkipJump(EvasionAttack):
+class MyHopSkipJump(EvasionAttack):
     """
     Implementation of the HopSkipJump attack from Jianbo et al. (2019). This is a powerful black-box attack that
     only requires final class prediction, and is an advanced version of the boundary attack.
@@ -73,6 +74,7 @@ class HopSkipJump(EvasionAttack):
         init_eval: int = 100,
         init_size: int = 100,
         verbose: bool = True,
+        max_query: int = 10000,
     ) -> None:
         """
         Create a HopSkipJump attack instance.
@@ -104,6 +106,17 @@ class HopSkipJump(EvasionAttack):
             self.theta = 0.01 / np.sqrt(np.prod(self.estimator.input_shape))
         else:
             self.theta = 0.01 / np.prod(self.estimator.input_shape)
+
+        # Set query count
+        self.nb_query = 0
+        self.max_query = max_query
+
+        pred = self.estimator.predict
+        def _pred(obj, x, *args, **kwargs):
+            self.nb_query += x.shape[0]
+            return pred(x, *args, **kwargs)
+
+        setattr(self.estimator, 'predict', types.MethodType(_pred, self.estimator))
 
     def generate(self, x: np.ndarray, y: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
         """
@@ -383,56 +396,65 @@ class HopSkipJump(EvasionAttack):
         current_sample = initial_sample
 
         # Main loop to wander around the boundary
-        for _ in trange(self.max_iter, desc='HopSkipJump'):
-            # First compute delta
-            delta = self._compute_delta(
-                current_sample=current_sample, original_sample=original_sample, clip_min=clip_min, clip_max=clip_max,
-            )
-
-            # Then run binary search
-            current_sample = self._binary_search(
-                current_sample=current_sample,
-                original_sample=original_sample,
-                norm=self.norm,
-                target=target,
-                clip_min=clip_min,
-                clip_max=clip_max,
-            )
-
-            # Next compute the number of evaluations and compute the update
-            num_eval = min(int(self.init_eval * np.sqrt(self.curr_iter + 1)), self.max_eval)
-
-            update = self._compute_update(
-                current_sample=current_sample,
-                num_eval=num_eval,
-                delta=delta,
-                target=target,
-                mask=mask,
-                clip_min=clip_min,
-                clip_max=clip_max,
-            )
-
-            # Finally run step size search by first computing epsilon
-            if self.norm == 2:
-                dist = np.linalg.norm(original_sample - current_sample)
-            else:
-                dist = np.max(abs(original_sample - current_sample))
-
-            epsilon = 2.0 * dist / np.sqrt(self.curr_iter + 1)
-            success = False
-
-            while not success:
-                epsilon /= 2.0
-                potential_sample = current_sample + epsilon * update
-                success = self._adversarial_satisfactory(
-                    samples=potential_sample[None], target=target, clip_min=clip_min, clip_max=clip_max,
+        with trange(self.max_iter, desc='HopSkipJump') as pbar:
+            for _ in pbar:
+                # First compute delta
+                delta = self._compute_delta(
+                    current_sample=current_sample, original_sample=original_sample, clip_min=clip_min, clip_max=clip_max,
                 )
 
-            # Update current sample
-            current_sample = np.clip(potential_sample, clip_min, clip_max)
+                # Then run binary search
+                current_sample = self._binary_search(
+                    current_sample=current_sample,
+                    original_sample=original_sample,
+                    norm=self.norm,
+                    target=target,
+                    clip_min=clip_min,
+                    clip_max=clip_max,
+                )
 
-            # Update current iteration
-            self.curr_iter += 1
+                # Next compute the number of evaluations and compute the update
+                num_eval = min(int(self.init_eval * np.sqrt(self.curr_iter + 1)), self.max_eval)
+
+                update = self._compute_update(
+                    current_sample=current_sample,
+                    num_eval=num_eval,
+                    delta=delta,
+                    target=target,
+                    mask=mask,
+                    clip_min=clip_min,
+                    clip_max=clip_max,
+                )
+
+                # Finally run step size search by first computing epsilon
+                if self.norm == 2:
+                    dist = np.linalg.norm(original_sample - current_sample)
+                else:
+                    dist = np.max(abs(original_sample - current_sample))
+
+                epsilon = 2.0 * dist / np.sqrt(self.curr_iter + 1)
+                success = False
+
+                while not success:
+                    epsilon /= 2.0
+                    potential_sample = current_sample + epsilon * update
+                    success = self._adversarial_satisfactory(
+                        samples=potential_sample[None], target=target, clip_min=clip_min, clip_max=clip_max,
+                    )
+
+                # Update current sample
+                current_sample = np.clip(potential_sample, clip_min, clip_max)
+
+                # Update current iteration
+                self.curr_iter += 1
+
+                # Break if query limit reached
+                pbar.set_postfix({
+                    'query': self.nb_query,
+                    'dist': f'{np.linalg.norm(original_sample - current_sample):.3f}',
+                })
+                if self.nb_query > self.max_query:
+                    break
 
         return current_sample
 
