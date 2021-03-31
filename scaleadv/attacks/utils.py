@@ -2,14 +2,13 @@
 This module implements the utilities of adaptive scaling attacks.
 """
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as nnf
 from art.estimators.classification import PyTorchClassifier
 from loguru import logger
 from torch.autograd import Variable
-
-import numpy as np
 from tqdm import trange
 
 from scaleadv.defenses.prevention import Pooling
@@ -147,7 +146,8 @@ def improve_theta(preprocess: nn.Module, x0, theta, gg):
     return theta_new.detach().cpu().numpy(), gg_new.detach().cpu().numpy().item()
 
 
-def inverse_preprocess(preprocess: nn.Module, x0: torch.Tensor, delta: torch.Tensor, w1=1.0,w2=10.0,T=2000,tau=100) -> torch.Tensor:
+def inverse_preprocess(preprocess: nn.Module, x0: torch.Tensor, delta: torch.Tensor, w1=1.0, w2=10.0, T=2000,
+                       tau=100) -> torch.Tensor:
     """
     Map LR-space perturbation delta to the HR-space.
     Find delta_hr, such that preprocess(x0 + delta_hr) ≈ preprocess(x0) + delta
@@ -173,7 +173,7 @@ def inverse_preprocess(preprocess: nn.Module, x0: torch.Tensor, delta: torch.Ten
     # solve for var=x0+Delta*
     var_hr = Variable(x0.detach().clone(), requires_grad=True)
     opt = torch.optim.Adam([var_hr], lr=0.01)
-    with trange(T, disable=False) as pbar:
+    with trange(T, disable=True) as pbar:
         prev = np.inf
         for i in pbar:
             var_lr = preprocess(var_hr)
@@ -200,10 +200,44 @@ def inverse_preprocess(preprocess: nn.Module, x0: torch.Tensor, delta: torch.Ten
     return delta_hr
 
 
-def inverse_preprocess_np(preprocess: nn.Module, x0: np.ndarray, delta: np.ndarray, w1=1.0,w2=10.0,T=2000,tau=100) -> np.ndarray:
+def inverse_preprocess_np(preprocess: nn.Module, x0: np.ndarray, delta: np.ndarray, w1=1.0, w2=10.0, T=2000,
+                          tau=100) -> np.ndarray:
     if preprocess is None:
         return delta
     x0 = torch.as_tensor(x0, dtype=torch.float).cuda()
     delta = torch.as_tensor(delta, dtype=torch.float).cuda()
-    res = inverse_preprocess(preprocess, x0, delta,w1,w2,T,tau)
+    res = inverse_preprocess(preprocess, x0, delta, w1, w2, T, tau)
     return res.cpu().numpy()
+
+
+def inverse_median(classifier: nn.Module, median: nn.Module, src: np.ndarray, tgt: np.ndarray, w1=1.0, w2=10.0, T=2000,
+                   tau=100, lr=0.01) -> np.ndarray:
+    src = torch.as_tensor(src).cuda()
+    tgt = torch.as_tensor(tgt).cuda()
+    y_src = classifier(src).argmax(1)
+
+    var = torch.zeros_like(src).requires_grad_()
+    var.data = img_to_tanh(src.data)
+    opt = torch.optim.Adam([var], lr=lr)
+    with trange(T, desc='Inverse Median') as pbar:
+        for i in pbar:
+            att = tanh_to_img(var)
+            att_med = median(att)
+            loss_src = torch.square(src - att).mean() * 255 ** 2
+            loss_tgt = torch.square(tgt - att_med).mean() * 255 ** 2
+            loss_total = w1 * loss_src + w2 * loss_tgt
+            opt.zero_grad()
+            loss_total.backward()
+            opt.step()
+
+            pbar.set_postfix({
+                'src': f'{loss_src.cpu().item():.5f}',
+                'tgt': f'{loss_tgt.cpu().item():.5f}',
+                'tot': f'{loss_total.cpu().item():.5f}',
+            })
+            if i and i % tau == 0:
+                pred = classifier(att.detach()).argmax(1).cpu().item()
+                if pred != y_src:
+                    break
+
+    return att.detach().cpu().numpy()
