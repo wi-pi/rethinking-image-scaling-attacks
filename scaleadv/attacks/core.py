@@ -7,23 +7,12 @@ from art.attacks import EvasionAttack
 from torch.autograd import Variable
 from tqdm import trange
 
-from scaleadv.attacks.utils import PyTorchClassifierFull
+from scaleadv.attacks.utils import PyTorchClassifierFull, img_to_tanh, tanh_to_img
 from scaleadv.defenses import Pooling
 from scaleadv.models import ScalingLayer, FullNet
 from scaleadv.scaling import ScalingAPI
 
 ART_ATTACK = TypeVar('ART_ATTACK', bound=EvasionAttack)
-
-
-def img_to_tanh(x: torch.Tensor) -> torch.Tensor:
-    x = (x * 2 - 1) * (1 - 1.e-6)
-    x = torch.atanh(x)
-    return x
-
-
-def tanh_to_img(x: torch.Tensor) -> torch.Tensor:
-    x = (x.tanh() + 1) * 0.5
-    return x
 
 
 class ScaleAttack(object):
