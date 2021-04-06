@@ -28,6 +28,7 @@ import types
 from typing import Optional, Tuple, Union, TYPE_CHECKING
 
 import numpy as np
+import torch
 from tqdm import trange
 from tqdm.auto import tqdm
 
@@ -75,6 +76,8 @@ class MyHopSkipJump(EvasionAttack):
         init_size: int = 100,
         verbose: bool = True,
         max_query: int = 10000,
+        preprocess = None,
+        tag: str = None,
     ) -> None:
         """
         Create a HopSkipJump attack instance.
@@ -100,6 +103,8 @@ class MyHopSkipJump(EvasionAttack):
         self.verbose = verbose
         self._check_params()
         self.curr_iter = 0
+        self.preprocess = preprocess
+        self.tag = tag
 
         # Set binary search threshold
         if norm == 2:
@@ -110,11 +115,12 @@ class MyHopSkipJump(EvasionAttack):
         # Set query count
         self.nb_query = 0
         self.max_query = max_query
+        self.log = []
 
         pred = self.estimator.predict
-        def _pred(obj, x, *args, **kwargs):
+        def _pred(obj, x, batch_size=1, *args, **kwargs):
             self.nb_query += x.shape[0]
-            return pred(x, *args, **kwargs)
+            return pred(x, 1, *args, **kwargs)
 
         setattr(self.estimator, 'predict', types.MethodType(_pred, self.estimator))
 
@@ -397,7 +403,8 @@ class MyHopSkipJump(EvasionAttack):
 
         # Main loop to wander around the boundary
         with trange(self.max_iter, desc='HopSkipJump') as pbar:
-            for _ in pbar:
+            for i in pbar:
+                print()
                 # First compute delta
                 delta = self._compute_delta(
                     current_sample=current_sample, original_sample=original_sample, clip_min=clip_min, clip_max=clip_max,
@@ -424,6 +431,7 @@ class MyHopSkipJump(EvasionAttack):
                     mask=mask,
                     clip_min=clip_min,
                     clip_max=clip_max,
+                    it=i,
                 )
 
                 # Finally run step size search by first computing epsilon
@@ -449,10 +457,15 @@ class MyHopSkipJump(EvasionAttack):
                 self.curr_iter += 1
 
                 # Break if query limit reached
-                pbar.set_postfix({
-                    'query': self.nb_query,
-                    'dist': f'{np.linalg.norm(original_sample - current_sample):.3f}',
-                })
+                if self.tag is not None:
+                    import torch
+                    import torchvision.transforms.functional as F
+                    F.to_pil_image(torch.as_tensor(current_sample)).save(f'{self.tag}.{i:02d}.png')
+
+                # logging
+                dist = np.linalg.norm(original_sample - current_sample)
+                pbar.set_postfix({'query': self.nb_query, 'l2': f'{dist:.3f}'})
+                self.log.append((i, self.nb_query, dist))
                 if self.nb_query > self.max_query:
                     break
 
@@ -552,6 +565,7 @@ class MyHopSkipJump(EvasionAttack):
         mask: Optional[np.ndarray],
         clip_min: float,
         clip_max: float,
+        it: int,
     ) -> np.ndarray:
         """
         Compute the update in Eq.(14).
@@ -569,10 +583,13 @@ class MyHopSkipJump(EvasionAttack):
         """
         # Generate random noise
         rnd_noise_shape = [num_eval] + list(self.estimator.input_shape)
-        if self.norm == 2:
-            rnd_noise = np.random.randn(*rnd_noise_shape).astype(ART_NUMPY_DTYPE)
+        if self.preprocess is None:
+            if self.norm == 2:
+                rnd_noise = np.random.randn(*rnd_noise_shape).astype(ART_NUMPY_DTYPE)
+            else:
+                rnd_noise = np.random.uniform(low=-1, high=1, size=rnd_noise_shape).astype(ART_NUMPY_DTYPE)
         else:
-            rnd_noise = np.random.uniform(low=-1, high=1, size=rnd_noise_shape).astype(ART_NUMPY_DTYPE)
+            rnd_noise = self._get_noise(current_sample, num_eval, it)
 
         # With mask
         if mask is not None:
@@ -608,6 +625,25 @@ class MyHopSkipJump(EvasionAttack):
             result = np.sign(grad)
 
         return result
+
+    def _get_noise(
+        self,
+        current_sample: np.ndarray,
+        num_eval: int,
+        it: int
+    ) -> np.ndarray:
+        """Get gradient of preprocess"""
+        rnd_noise = np.zeros([num_eval] + list(self.estimator.input_shape)).astype(ART_NUMPY_DTYPE)
+        x_hr = torch.as_tensor(current_sample[None, ...]).cuda()
+        for i in range(num_eval):
+            delta_lr = torch.randn(1, 3, 224, 224).cuda()
+            delta_hr = torch.zeros_like(x_hr).requires_grad_()
+            perturbed_hr = x_hr + delta_hr
+            perturbed_lr = self.preprocess[1](x_hr) + delta_lr
+            loss = torch.norm(self.preprocess[0](perturbed_hr) - perturbed_lr)
+            loss.backward()
+            rnd_noise[i] = delta_hr.grad.cpu().numpy().astype(ART_NUMPY_DTYPE)
+        return rnd_noise
 
     def _adversarial_satisfactory(
         self, samples: np.ndarray, target: int, clip_min: float, clip_max: float

@@ -119,6 +119,27 @@ class MedianPooling(Pooling):
         return med
 
 
+class QuantilePooling(Pooling):
+    """Replace each pixel by the median of a window."""
+
+    def __init__(self, *args, **kwargs):
+        super(QuantilePooling, self).__init__(*args, **kwargs)
+
+    def pooling(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.unfold(x)
+        # out = x.median(dim=-1).values
+
+        # center quantile
+        low = x.quantile(0.25, dim=-1)[..., None]
+        # med = x.median(dim=-1).values[..., None]
+        high = x.quantile(0.75, dim=-1)[..., None]
+        ind = (low <= x) * (x <= high)  # * (1 - (x + med).abs())
+
+        out = (x * ind).sum(dim=-1) / ind.sum(dim=-1)
+
+        return out
+
+
 class RandomPooling(Pooling, ABC):
     """The base class for all random pooling based defenses.
 
@@ -208,12 +229,79 @@ class RandomPoolingLaplacian(RandomPooling):
         return k / k.sum()
 
 
+# noinspection PyShadowingBuiltins
+class SoftMedian(torch.autograd.Function):
+
+    @staticmethod
+    def forward(ctx, input: torch.Tensor):
+        output = input.median(dim=-1)
+        ctx.save_for_backward(input, output.indices, output.values)
+        return output.values
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # prepare variables
+        input, median_indices, median = ctx.saved_tensors
+        median_indices, median, grad_output = map(lambda x: x[..., None], [median_indices, median, grad_output])
+        grad_input = torch.zeros_like(input)
+
+        # make grad_input more useful
+        # 1. deviation (value) to the median
+        deviation_to_median = (input - median).abs()
+        # 2. deviation (sorted index) to the median
+        deviation_to_median_index = (input.argsort().float() - median_indices).abs()
+        # 3. how many pixels do we want to change in each block?
+        # from IPython import embed; embed(using=False); exit()
+        # nb_pixels = (torch.randn_like(median) * 2).round().abs()
+        useful_grad = grad_output  # / deviation_to_median.exp()
+
+        # for grad > 0, we extend grads to RHS of median
+        # indicator_has_grad = (grad_output > 0) & (input >= median) & (deviation_to_median_index <= nb_pixels)
+        # grad_input += indicator_has_grad * useful_grad
+
+        # for grad < 0, we extend grads to LHS of median
+        # indicator_has_grad = (grad_output < 0) & (input <= median) & (deviation_to_median_index <= nb_pixels)
+        # grad_input += indicator_has_grad * useful_grad
+        grad_input += useful_grad * (deviation_to_median_index <= 5)
+
+        return grad_input
+
+
+class SoftMedianPooling(Pooling):
+
+    def pooling(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.unfold(x)
+        return SoftMedian.apply(x)
+
+
 POOLING_MAPS = {
     'none': NonePooling,
     'min': MinPooling,
     'max': MaxPooling,
     'median': MedianPooling,
+    'quantile': QuantilePooling,
+    'softmedian': SoftMedianPooling,
     'uniform': RandomPoolingUniform,
     'gaussian': RandomPoolingGaussian,
     'laplacian': RandomPoolingLaplacian,
 }
+if __name__ == '__main__':
+    mask = torch.tensor([[0, 0, 0, 0, 0],
+                         [0, 1, 0, 1, 0],
+                         [0, 0, 0, 0, 0],
+                         [0, 1, 0, 1, 0],
+                         [0, 0, 0, 0, 0]]).reshape(1, 1, 5, 5).float().cuda()
+    p = SoftMedianPooling(3, 1, 1, mask).cuda()
+
+    # a = torch.randint(20, (1,1,5,5)).float().cuda().requires_grad_()
+    a = torch.tensor([[1, 4, 3, 4, 1],
+                      [1, 4, 1, 4, 1],
+                      [1, 4, 4, 4, 1],
+                      [1, 2, 3, 4, 5],
+                      [6, 6, 6, 7, 7]]).reshape(1, 1, 5, 5).float().cuda().requires_grad_()
+    b = p(a).cuda()
+    (b * mask).sum().backward()
+    from IPython import embed;
+
+    embed(using=False);
+    exit()
