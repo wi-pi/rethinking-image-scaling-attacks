@@ -130,10 +130,10 @@ class QuantilePooling(Pooling):
         # out = x.median(dim=-1).values
 
         # center quantile
-        low = x.quantile(0.25, dim=-1)[..., None]
-        # med = x.median(dim=-1).values[..., None]
-        high = x.quantile(0.75, dim=-1)[..., None]
-        ind = (low <= x) * (x <= high)  # * (1 - (x + med).abs())
+        low = x.quantile(0.3, dim=-1)[..., None]
+        med = x.median(dim=-1).values[..., None]
+        high = x.quantile(0.7, dim=-1)[..., None]
+        ind = (low <= x) * (x <= high) * (1 - (x - med).abs())
 
         out = (x * ind).sum(dim=-1) / ind.sum(dim=-1)
 
