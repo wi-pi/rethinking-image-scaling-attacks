@@ -2,6 +2,7 @@ import pickle
 from argparse import ArgumentParser
 from collections import defaultdict
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
@@ -10,11 +11,12 @@ import torchvision.transforms as T
 from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
 from scaleadv.evaluate.utils import DataManager
-from scaleadv.models.resnet import IMAGENET_MODEL_PATH, resnet50
+from scaleadv.models.resnet import IMAGENET_MODEL_PATH
 from scaleadv.scaling import ScalingLib, ScalingAlg, ScalingAPI
 from scaleadv.utils import set_ccs_font, get_id_list_by_ratio
 
 BLUE, ORANGE, GREEN, RED = plt.rcParams['axes.prop_cycle'].by_key()['color'][:4]
+
 
 def get_acc_pert(lib, alg, scale, eva):
     # Load data
@@ -25,7 +27,6 @@ def get_acc_pert(lib, alg, scale, eva):
     src_shape = (224 * scale, 224 * scale)
     inp_shape = (224, 224)
     scaling_api = ScalingAPI(src_shape, inp_shape, lib, alg)
-    class_network = resnet50(args.model, normalize=True).eval().cuda()
 
     # Load utils
     id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_{scale}.pkl', 'rb'))
@@ -78,28 +79,19 @@ def get_acc_pert(lib, alg, scale, eva):
 
 def plot_all():
     acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, args.eval)
-    # set_ccs_font(22)
-    # plt.figure(figsize=(6, 6), constrained_layout=True)
-    # plt.plot(eps_list, acc_list['adv'], marker='o', ms=4, lw=3, label='PGD Attack')
-    # plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=3, label='Scale-Adv (none)')
-    # plt.plot(pert_list['att_median'], acc_list['att_median'], marker='o', ms=4, lw=3, label='Scale-Adv (median)')
-    # plt.plot(pert_list['att_uniform'], acc_list['att_uniform'], marker='o', ms=4, lw=3, label='Scale-Adv (random)')
-    # plt.xlim(-0.5, args.right + 1)
-    # plt.xticks(list(range(0, args.right + 1, 2)), fontsize=24)
-    # plt.ylim(-2, 102)
-    # plt.yticks(list(range(0, 101, 10)), fontsize=24)
-    # plt.legend()
-    # plt.savefig(f'acc-{args.eval}.{args.scale}.pdf')
     set_ccs_font(10)
     plt.figure(figsize=(3, 3), constrained_layout=True)
-    plt.plot(eps_list, acc_list['adv'], marker='D', ms=4, lw=1.5, c='k', label='PGD Attack')
     plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=1.5, c=GREEN, label='Scale-Adv (none)')
     plt.plot(pert_list['att_median'], acc_list['att_median'], marker='^', ms=4, lw=1.5, c=ORANGE, label='Scale-Adv (median)')
     plt.plot(pert_list['att_uniform'], acc_list['att_uniform'], marker='s', ms=4, lw=1.5, c=RED, label='Scale-Adv (random)')
+    plt.plot(eps_list, acc_list['adv'], marker='D', ms=4, lw=1.5, c='k', label='PGD Attack')
+    plt.plot(pert_list['att_uniform'], acc_list['att_uniform'], marker='s', ms=4, lw=1.5, c=RED)
     plt.xlim(-0.5, args.right + 0.5)
     plt.xticks(list(range(0, args.right + 1, 2)), fontsize=12)
+    plt.xlabel(r'Perturbation Budget ($\ell_2$)')
     plt.ylim(-2, 102)
-    plt.yticks(list(range(0, 101, 10)), fontsize=12)
+    plt.yticks(list(range(0, 101, 20)), fontsize=12)
+    plt.ylabel('Accuracy (%)')
     plt.legend(borderaxespad=0.5)
     plt.grid(True)
     plt.savefig(f'acc-{args.eval}.{args.scale}.pdf')
@@ -111,19 +103,22 @@ def plot_hide_generate():
     plt.figure(figsize=(3, 3), constrained_layout=True)
 
     # hide
-    acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, 'hide')
-    plt.plot(eps_list, acc_list['adv'], marker='D', ms=4, lw=1.5, c='k', label='PGD Attack')
-    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=1.5, c=RED, label='Scale-Adv (Hide)')
+    # acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, 'hide')
+    # plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=1.5, c=RED, label='Scale-Adv (Hide)')
 
     # generate
     acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, 'generate')
-    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=1.5, ls='--', c=ORANGE, label='Scale-Adv (Generate)')
+    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=1.5, ls='--', c=GREEN, label='Scale-Adv')
+    plt.plot(eps_list, acc_list['adv'], marker='D', ms=4, lw=1.5, c='k', label='PGD Attack')
+    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=1.5, ls='--', c=GREEN)
 
     # final
     plt.xlim(-0.5, args.right + 0.5)
     plt.xticks(list(range(0, args.right + 1, 2)), fontsize=12)
+    plt.xlabel(r'Perturbation Budget ($\ell_2$)')
     plt.ylim(-2, 102)
-    plt.yticks(list(range(0, 101, 10)), fontsize=12)
+    plt.yticks(list(range(0, 101, 20)), fontsize=12)
+    plt.ylabel('Accuracy (%)')
     plt.legend(borderaxespad=0.5)
     plt.grid(True)
     plt.savefig(f'acc-all.{args.lib}.{args.alg}.{args.scale}.pdf')
@@ -144,6 +139,9 @@ if __name__ == '__main__':
     _('-r', '--right', default=21, type=int)
     _('-s', '--step', default=1, type=int)
     args = p.parse_args()
+
+    mpl.rcParams['axes.spines.right'] = False
+    mpl.rcParams['axes.spines.top'] = False
 
     if args.eval == 'all':
         plot_hide_generate()
