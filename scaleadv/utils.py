@@ -1,7 +1,6 @@
 def set_ccs_font(fontsize=None):
     import matplotlib as mpl
-    mpl.rcParams['font.sans-serif'] = "Linux Libertine"
-    mpl.rcParams['font.family'] = "sans-serif"
+    mpl.rcParams['font.family'] = "Times New Roman"
     mpl.rcParams['mathtext.fontset'] = "cm"
     if fontsize:
         mpl.rcParams['font.size'] = fontsize
