@@ -140,6 +140,24 @@ class QuantilePooling(Pooling):
         return out
 
 
+class AnotherSoftMedianPooling(Pooling):
+    """Replace each pixel by the median of a window.
+
+    Problem: Too much memory, impractical.
+    """
+
+    def pooling(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.unfold(x)
+
+        diff = x[..., None, :] - x[..., None]
+        sign = 2 * diff.atan() / np.pi
+        sign = sign.sum(-1).square().neg().exp()
+        weight = sign / sign.sum(dim=-1, keepdims=True)
+        out = (x * weight).sum(dim=-1)
+
+        return out
+
+
 class RandomPooling(Pooling, ABC):
     """The base class for all random pooling based defenses.
 
@@ -301,7 +319,3 @@ if __name__ == '__main__':
                       [6, 6, 6, 7, 7]]).reshape(1, 1, 5, 5).float().cuda().requires_grad_()
     b = p(a).cuda()
     (b * mask).sum().backward()
-    from IPython import embed;
-
-    embed(using=False);
-    exit()
