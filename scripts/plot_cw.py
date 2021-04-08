@@ -132,7 +132,7 @@ def plot_sar_vs_pert():
     plt.xlim(-0.5, 20.5)
     plt.xticks(list(range(0, 21, 5)), fontsize=12)
     plt.ylim(-2, 102)
-    plt.yticks(list(range(0, 101, 10)), fontsize=12)
+    plt.yticks(list(range(0, 101, 20)), fontsize=12)
     plt.xlabel(r'Perturbation Budget ($\ell_2$)')
     plt.ylabel('Success Rate (%)')
     plt.legend(borderaxespad=0.5, loc='lower right', fontsize=10)
