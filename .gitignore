@@ -232,4 +232,5 @@ modules.xml
 /*.png
 /*.npy
 /*.pdf
+/static
 !testcases
