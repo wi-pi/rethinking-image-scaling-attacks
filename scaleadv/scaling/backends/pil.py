@@ -1,7 +1,10 @@
+"""
+This module implements the PIL scaling backend.
+"""
 import numpy as np
 from PIL import Image
 
-from . import ScalingBackend, ShapeType, ScalingAlg
+from .core import ScalingBackend, ScalingAlg, ShapeType
 
 
 class ScalingBackendPIL(ScalingBackend):

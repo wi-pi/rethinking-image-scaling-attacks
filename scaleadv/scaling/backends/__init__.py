@@ -1,1 +1,1 @@
-from .backend import ShapeType, ScalingLib, ScalingAlg, ScalingBackend
+from .core import ShapeType, ScalingLib, ScalingAlg, ScalingBackend

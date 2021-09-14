@@ -1,7 +1,10 @@
+"""
+This module implements the OpenCV scaling backend.
+"""
 import cv2 as cv
 import numpy as np
 
-from . import ScalingBackend, ShapeType, ScalingAlg
+from .core import ScalingBackend, ScalingAlg, ShapeType
 
 
 class ScalingBackendCV(ScalingBackend):
