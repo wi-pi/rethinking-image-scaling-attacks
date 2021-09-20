@@ -1,2 +1,2 @@
-from .backends import ShapeType, ScalingLib, ScalingAlg, ScalingBackend
-from .api import ScalingAPI
+from scaleadv.scaling.api import ScalingAPI
+from scaleadv.scaling.enum import ScalingAlg, ScalingLib

@@ -4,7 +4,8 @@ This module implements the PIL scaling backend.
 import numpy as np
 from PIL import Image
 
-from .core import ScalingBackend, ScalingAlg, ShapeType
+from scaleadv.scaling.backend import ScalingBackend, Shape
+from scaleadv.scaling.enum import ScalingAlg
 
 
 class ScalingBackendPIL(ScalingBackend):
@@ -16,7 +17,7 @@ class ScalingBackendPIL(ScalingBackend):
         ScalingAlg.AREA: Image.BOX,
     }
 
-    def _scale(self, x: np.ndarray, shape: ShapeType) -> np.ndarray:
+    def _scale(self, x: np.ndarray, shape: Shape) -> np.ndarray:
         y = x
 
         # PIL only supports uint8 for RGB mode.
