@@ -28,7 +28,7 @@ def run_adv(load=True):
     classifier = PyTorchClassifier(class_network, nn.CrossEntropyLoss(), (3,) + inp_shape, 1000, clip_values=(0, 1))
 
     for eps in eps_list:
-        attack = CarliniL2Method(classifier, confidence=eps, binary_search_steps=20, max_iter=50, verbose=False)
+        attack = CarliniL2Method(classifier, confidence=eps, binary_search_steps=20, max_iter=100, verbose=False)
         for i in tqdm(id_list, desc=f'Adversarial Attack (eps {eps})'):
             src, y = dataset[i]
             inp = scaling_api(src[0])[None, ...]
@@ -52,7 +52,7 @@ def run_att(action: str):
     for eps in eps_list:
         for i in tqdm(id_list, desc=f'Scaling Attack {action.title()} (eps {eps})'):
             src, y_src = dataset[i]
-            adv = im.load_adv(i, eps)
+            adv = im_ADV.load_adv(i, eps)
             y_adv = classifier.predict(adv).argmax(1).item()
             if action == 'hide':
                 if y_src == y_adv:  # NOTE: hide only if the adv is successful.
@@ -60,7 +60,7 @@ def run_att(action: str):
                 else:
                     att = attack.hide(src, adv, y_src, y_adv, max_iter=200, weight=2, verbose=False)
             elif action == 'generate':
-                attack_kwargs = dict(confidence=eps, binary_search_steps=20, max_iter=50, verbose=False)
+                attack_kwargs = dict(confidence=eps, binary_search_steps=20, max_iter=100, verbose=False)
                 att = attack.generate(src, y_src, CarliniL2Method, attack_kwargs)
             else:
                 raise NotImplementedError
@@ -107,8 +107,9 @@ if __name__ == '__main__':
     id_list = get_id_list_by_ratio(id_list, args.scale)[::2]
     id_list = list(itemgetter(*range(args.left, args.right, args.step))(id_list))
     eps_list = list(range(11))  # list(range(args.left, args.right, args.step))
-    im = ImageManager(scaling_api)
-    dm = DataManager(scaling_api)
+    im_ADV = ImageManager(scaling_api)
+    im = ImageManager(scaling_api, tag='.cw_med_it100')
+    dm = DataManager(scaling_api, tag='.cw_med_it100')
     e = Evaluator(scaling_api, class_network, nb_samples=1)
 
     if args.action == 'adv':

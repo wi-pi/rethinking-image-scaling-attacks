@@ -17,10 +17,9 @@ from scaleadv.models.resnet import IMAGENET_MODEL_PATH
 from scaleadv.scaling import ScalingAPI, ScalingLib, ScalingAlg
 
 
-def attack_one(id):
-    src, y_src = dataset[id_list[id]]
+def attack_one(id, setid=False):
+    src, y_src = dataset[id] if setid else dataset[id_list[id]]
     logger.info(f'Loading source image: id {id}, label {y_src}, shape {src.shape}, dtype {src.dtype}.')
-    pref = f'static/bb/{id}.ratio_{args.scale}.def_{args.defense}'
 
     # Load scaling
     scaling_api = ScalingAPI(src.shape[-2:], (224, 224), args.lib, args.alg)
@@ -52,10 +51,11 @@ if __name__ == '__main__':
     p = ArgumentParser()
     _ = p.add_argument
     # Input args
+    _('--id', default=-1, type=int, help='set a particular id')
     _('--model', default='none', type=str, choices=IMAGENET_MODEL_PATH.keys(), help='use robust model, optional')
     _('-l', type=int)
     _('-r', type=int)
-    _('-s', type=int)
+    _('-s', type=int, default=1)
     _('-g', type=int, default=0)
     # Scaling args
     _('--lib', default='cv', type=str, choices=ScalingLib.names(), help='scaling libraries')
@@ -68,19 +68,29 @@ if __name__ == '__main__':
     args = p.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = f'{args.g}'
 
+    # Check test mode
+    INSTANCE_TEST = args.id != -1
+
     # Load data
     transform = T.Compose([Align(224, args.scale), T.ToTensor(), lambda x: np.array(x)[None, ...]])
-    dataset = get_imagenet(f'val_3', transform)
+    dataset = get_imagenet('val' if INSTANCE_TEST else f'val_3', transform)
     id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_3.pkl', 'rb'))[::4]
 
-    os.makedirs('static/bb', exist_ok=True)
+    root = 'static/bb_med19'
+    os.makedirs(root, exist_ok=True)
 
     # Load network
     class_network = resnet50(robust=args.model, normalize=True).eval().cuda()
 
     # attack each one
+    if INSTANCE_TEST:
+        pref = f'bb_test.{args.id}.{args.defense}'
+        attack_one(args.id, setid=True)
+        exit()
+
     for i in range(args.l, args.r, args.s):
-        attack_one(i)
+        pref = f'{root}/{i}.ratio_{args.scale}.def_{args.defense}'
+        attack_one(i, setid=False)
 
     """Attack on filtered HR
     """

@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 import numpy as np
 import torch.nn as nn
 import torchvision.transforms as T
-from art.attacks.evasion import ProjectedGradientDescentPyTorch as PGD
+from art.attacks.evasion import ProjectedGradientDescentPyTorch as PGD, CarliniL2Method
 from art.estimators.classification import PyTorchClassifier
 from loguru import logger
 from torch.nn import DataParallel
@@ -59,13 +59,13 @@ if __name__ == '__main__':
     args.norm = NORM[args.norm]
 
     # Load data
-    transform = T.Compose([Align(224, args.scale), T.ToTensor(), lambda x: np.array(x)[None, ...]])
+    transform = T.Compose([Align(256, args.scale), T.ToTensor(), lambda x: np.array(x)[None, ...]])
     dataset = get_imagenet('val', transform)
     src, y_src = dataset[args.id]
     logger.info(f'Loading source image: id {args.id}, label {y_src}, shape {src.shape}, dtype {src.dtype}.')
 
     # Load scaling
-    scaling_api = ScalingAPI(src.shape[-2:], (224, 224), args.lib, args.alg)
+    scaling_api = ScalingAPI(src.shape[-2:], (256, 256), args.lib, args.alg)
     inp = scaling_api(src[0])[None, ...]
 
     # Load pooling
@@ -86,8 +86,9 @@ if __name__ == '__main__':
     norm, eps, max_iter = args.norm, args.eps, args.step
     eps_step = eps * 10 / max_iter
     logger.info(f'Loading PGD attack: norm {norm}, eps {eps:.3f}, eps_step {eps_step:.3f}, max_iter {max_iter}.')
-    adv_attack = PGD(classifier, norm, eps, eps_step, max_iter, targeted=True, verbose=False)
-    adv = adv_attack.generate(inp, np.eye(1000, dtype=int)[[99]])
+    # adv_attack = PGD(classifier, norm, eps, eps_step, max_iter, targeted=True, verbose=False)
+    adv_attack = CarliniL2Method(classifier, confidence=args.eps, binary_search_steps=30, max_iter=20, targeted=True)
+    adv = adv_attack.generate(inp, np.array([90]))
 
     # Initial test
     y_inp = classifier.predict(inp).argmax(1).item()
@@ -100,11 +101,14 @@ if __name__ == '__main__':
     if args.action == 'hide':
         att = attack.hide(src, adv, y_src, y_adv, args.iter, args.lr, args.weight, verbose=True)
     elif args.action == 'generate':
-        attack_kwargs = dict(norm=args.norm, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step)
-        att = attack.generate(src, y_src, PGD, attack_kwargs)
+        # attack_kwargs = dict(norm=args.norm, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step)
+        attack_kwargs = dict(confidence=args.eps, binary_search_steps=30, max_iter=20, targeted=True)
+        logger.info('Start generating...')
+        att = attack.generate(src, 90, CarliniL2Method, attack_kwargs)
+        logger.info('Done generating...')
     else:
         raise NotImplementedError
 
     # Evaluate
-    e = Evaluator(scaling_api, class_network)
+    e = Evaluator(scaling_api, class_network, nb_samples=1)
     e.eval(src, adv, att, y_src, y_adv, tag=f'test.{args.id}.{args.action}.{args.defense}', show=True, save='.')

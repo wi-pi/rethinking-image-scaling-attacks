@@ -43,8 +43,11 @@ class Evaluator(object):
                 x = x.repeat(n, 1, 1, 1)
                 x = self.pooling[pooling](x)
                 x = self.scaling_layer(x)
-            pred = self.class_network(x).argmax(1).cpu()
-        return pred.numpy()
+            pred = self.class_network(x).cpu()
+            pred, score = pred.argmax(1).numpy(), pred.max(1).values.numpy()
+            if n == 1:
+                pred, score = pred.item(), score.item()
+        return pred, score
 
     def eval(self, src: np.ndarray, adv: np.ndarray, att: np.ndarray, y_src: int, y_adv: Optional[int] = None,
              tag: str = 'test', show: bool = False, save: str = ''):
@@ -89,9 +92,9 @@ class Evaluator(object):
 
         stats = OrderedDict({
             # pred (normal)
-            'Y': self.predict(x, pooling='none', scaling=scaling).item(),
+            'Y': self.predict(x, pooling='none', scaling=scaling),
             # pred (pooling)
-            'Y_MED': self.predict(x, pooling='median', scaling=True).item() if scaling else None,
+            'Y_MED': self.predict(x, pooling='median', scaling=True) if scaling else None,
             'Y_RND': self.predict(x, pooling='uniform', scaling=True, n=self.nb_samples) if scaling else None,
             # distance
             'Linf': torch.norm(x - ref, p=np.inf).cpu().item(),
@@ -107,16 +110,16 @@ class Evaluator(object):
         for k, data in stats.items():
             row = [k]
             # predict (normal)
-            p = data['Y']
-            row.append(p)
+            p, s = data['Y']
+            row.append(f'{p} ({s:.5f})')
             # predict (median)
-            p = data['Y_MED']
-            p = '-' if p is None else p
-            row.append(p)
+            ps = data['Y_MED']
+            ps = '-' if ps is None else f'{ps[0]} ({ps[1]:.5f})'
+            row.append(ps)
             # predict (random)
-            p = data['Y_RND']
-            p = '-' if p is None else f'{np.mean(p == y_src):.2%} / {np.mean(p == y_adv):.2%}'
-            row.append(p)
+            ps = data['Y_RND']
+            ps = '-' if ps is None else f'{np.mean(ps[0] == y_src):.2%} / {np.mean(ps[0] == y_adv):.2%}'
+            row.append(ps)
             # distance metrics
             for field in self.fields[3:]:
                 if field in data:

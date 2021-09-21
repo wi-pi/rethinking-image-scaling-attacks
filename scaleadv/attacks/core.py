@@ -1,15 +1,16 @@
-from typing import Type, Dict, Any, TypeVar
+from typing import Any, Dict, Type, TypeVar
 
 import numpy as np
 import torch
 import torch.nn as nn
 from art.attacks import EvasionAttack
+from art.estimators.classification import PyTorchClassifier
 from torch.autograd import Variable
 from tqdm import trange
 
-from scaleadv.attacks.utils import PyTorchClassifierFull, img_to_tanh, tanh_to_img
+from scaleadv.attacks.utils import img_to_tanh, tanh_to_img
 from scaleadv.defenses import Pooling
-from scaleadv.models import ScalingLayer, FullNet
+from scaleadv.models import ScalingLayer
 from scaleadv.scaling import ScalingAPI
 
 ART_ATTACK = TypeVar('ART_ATTACK', bound=EvasionAttack)
@@ -31,20 +32,28 @@ class ScaleAttack(object):
         class_network: the final classification network.
     """
 
-    def __init__(self, scaling_api: ScalingAPI, pooling_layer: Pooling, class_network: nn.Module,
-                 nb_samples: int = 1, nb_flushes: int = 20, verbose=False):
+    def __init__(
+            self,
+            scaling_api: ScalingAPI,
+            pooling_layer: Pooling,
+            class_network: nn.Module,
+            nb_samples: int = 1,
+            nb_flushes: int = 20,
+            verbose=False
+    ):
         # Init network
         self.pooling_layer = pooling_layer
         self.scaling_layer = ScalingLayer.from_api(scaling_api).cuda()
         self.class_network = class_network
 
         # Init art's proxy
-        full_net = FullNet(pooling_layer, self.scaling_layer, class_network).cuda()
-        self.classifier_big = PyTorchClassifierFull(
+        # full_net = FullNet(pooling_layer, self.scaling_layer, class_network).cuda()
+        full_net = nn.Sequential(self.pooling_layer, self.scaling_layer, self.class_network).eval().cuda()
+        self.classifier_big = PyTorchClassifier(
             full_net, loss=nn.CrossEntropyLoss(), input_shape=(3,) + scaling_api.src_shape, nb_classes=1000,
-            clip_values=(0, 1), nb_samples=nb_samples, nb_flushes=nb_flushes, verbose=verbose
+            clip_values=(0, 1)  # , nb_samples=nb_samples, nb_flushes=nb_flushes, verbose=verbose
         )
-        self.smart_pooling = self.classifier_big.smart_pooling
+        # self.smart_pooling = self.classifier_big.smart_pooling
 
     @staticmethod
     def _check_inputs(x: np.ndarray):

@@ -110,8 +110,10 @@ if __name__ == '__main__':
     inp_shape = (224, 224)
     scaling_api = ScalingAPI(src_shape, inp_shape, 'cv', 'linear')
     dm = DataManager(scaling_api)
+    dm2 = DataManager(scaling_api, tag='.cw_med_it100')
     get_adv_data = lambda e: [dm.load_adv(i, e) for i in id_list]
     get_att_data = lambda e, d: [dm.load_att(i, e, d, 'generate') for i in id_list]
+    get_med_data = lambda e, d: [dm2.load_att(i, e, d, 'generate') for i in id_list]
 
     # get pert for cw
     pc = [[stat['adv']['L2'] for stat in get_adv_data(k)] for k in kappa_list]
@@ -120,6 +122,12 @@ if __name__ == '__main__':
     # get pert for scale
     ps = [[stat['att']['L2'] for stat in get_att_data(k, 'none')] for k in kappa_list]
     ps = np.array(ps, dtype=np.float32) / 3
+
+    # get pert for scale-median
+    pm = [[stat['att']['L2'] for stat in get_med_data(k, 'median')] for k in kappa_list]
+    pm = np.array(pm, dtype=np.float32) / 3
+
+    from IPython import embed; embed(using=False); exit()
 
     # skip ss < 50
     ok = np.argwhere(st >= 50)[:, 0]

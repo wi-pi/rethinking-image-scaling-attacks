@@ -41,8 +41,10 @@ def get_acc_pert(lib, alg, scale, budget=None):
     id_list = [id_list[i] for i in range(120)]
     eps_list = list(range(args.left, args.right + 1, args.step))
     dm = DataManager(scaling_api)
+    dm2 = DataManager(scaling_api, tag='.cw_med_it100')
     get_adv_data = lambda e: [dm.load_adv(i, e) for i in id_list]
     get_att_data = lambda e, d: [dm.load_att(i, e, d, 'generate') for i in id_list]
+    get_med_data = lambda e, d: [dm2.load_att(i, e, d, 'generate') for i in id_list]
 
     acc_list = defaultdict(list)
     pert_list = defaultdict(list)
@@ -66,7 +68,7 @@ def get_acc_pert(lib, alg, scale, budget=None):
     for defense, field in zip(['none', 'median'], ['Y', 'Y_MED']):
         for eps in eps_list:
             adv_data = get_adv_data(eps)
-            att_data = get_att_data(eps, defense)
+            att_data = get_att_data(eps, defense) if defense == 'none' else get_med_data(eps, defense)
             acc, pert = [], []
             for adv_stat, att_stat, i in zip(adv_data, att_data, id_list):
                 if adv_stat['src']['Y'][0] != dataset.targets[i]:

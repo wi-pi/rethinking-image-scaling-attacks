@@ -35,4 +35,4 @@ if __name__ == '__main__':
     # plot('Scale-Adv Attack (Generate)', 'generate', 2, 4)
     plot('Benign Image', 'source', 1, 3)
     plot('Attack Image', 'attack', 2, 4)
-    plt.savefig('test.jpg', quality=60)
+    plt.savefig('test.pdf')
