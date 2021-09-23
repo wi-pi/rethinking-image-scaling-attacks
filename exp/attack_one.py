@@ -8,8 +8,10 @@ from art.estimators.classification import PyTorchClassifier
 from loguru import logger
 
 from exp.utils import savefig
+from scaleadv.attacks.carlini import CarliniL2Method
 from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
+from scaleadv.defenses.preprocessor import MedianFilteringPyTorch
 from scaleadv.models import ScalingLayer
 from scaleadv.models.resnet import IMAGENET_MODEL_PATH, resnet50
 from scaleadv.scaling import *
@@ -47,27 +49,52 @@ if __name__ == '__main__':
     shape_large = x_large.shape[-2:]
     shape_small = (256, 256)
     api = ScalingAPI(src_shape=x_large.shape[-2:], tgt_shape=(256, 256), lib=args.lib, alg=args.alg)
-    # x_small = api(x_large[0])[None]
+    x_small = api(x_large[0])[None]
 
     # Load network
     scaling_layer = ScalingLayer.from_api(api)
     backbone_network = resnet50(args.model, normalize=True)
-    model = nn.Sequential(scaling_layer, backbone_network)
-    classifier = PyTorchClassifier(model, nn.CrossEntropyLoss(), x_large.shape[1:], 1000, clip_values=(0, 1))
+    model = nn.Sequential(scaling_layer, backbone_network) if api.ratio != 1 else backbone_network
+    classifier = PyTorchClassifier(
+        model=model,
+        loss=nn.CrossEntropyLoss(),
+        input_shape=x_large.shape[1:],
+        nb_classes=1000,
+        clip_values=(0, 1),
+        preprocessing_defences=MedianFilteringPyTorch(api),
+    )
 
     # Load attack
-    attack = ProjectedGradientDescentPyTorch(
+    # attack = ProjectedGradientDescentPyTorch(
+    #     classifier,
+    #     norm=2,
+    #     eps=args.eps,
+    #     eps_step=args.eps * 2.5 / args.step,
+    #     max_iter=args.step,
+    #     targeted=False,
+    #     verbose=False,
+    # )
+    attack = CarliniL2Method(
         classifier,
-        norm=2,
-        eps=args.eps,
-        eps_step=args.eps * 2.5 / args.step,
-        max_iter=args.step,
+        confidence=0,
         targeted=False,
-        verbose=False,
+        learning_rate=1e-2,
+        binary_search_steps=9,
+        max_iter=100,#00,
+        initial_const=1e-3,
+        batch_size=1,
+        verbose=False
     )
 
     # Run attack
     adv_large = attack.generate(x_large, np.eye(1000)[[y_large]])
     adv_small = api(adv_large[0])
-    savefig(adv_large, 'test1.png')
-    savefig(adv_small, 'test2.png')
+    print(classifier.predict(adv_large).argmax(1))
+
+    import scipy.linalg as la
+    print('-- large', la.norm(adv_large - x_large))
+    print('-- small', la.norm(adv_small - x_small))
+
+
+    savefig(adv_large, f'test1.{api.ratio}-med.png')
+    savefig(adv_small, f'test2.{api.ratio}-med.png')
