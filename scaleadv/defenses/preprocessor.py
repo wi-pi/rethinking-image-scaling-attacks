@@ -1,6 +1,5 @@
 from typing import Optional
 
-import numpy as np
 import torch
 from art.defences.preprocessor.preprocessor import PreprocessorPyTorch
 
@@ -8,7 +7,7 @@ from scaleadv.defenses import MedianPooling
 from scaleadv.scaling import ScalingAPI
 
 
-class MedianFilteringPyTorch(PreprocessorPyTorch):
+class MedianFilteringExact(PreprocessorPyTorch):
 
     def __init__(self, scaling_api: ScalingAPI):
         super().__init__(apply_fit=False, apply_predict=True)
@@ -19,3 +18,8 @@ class MedianFilteringPyTorch(PreprocessorPyTorch):
         x = self.median_filter(x)
         return x, y
 
+
+class MedianFilteringBPDA(MedianFilteringExact):
+
+    def estimate_forward(self, x: torch.Tensor, y: Optional[torch.Tensor] = None):
+        return x
