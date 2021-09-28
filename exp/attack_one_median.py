@@ -42,7 +42,7 @@ if __name__ == '__main__':
         T.ToTensor(),
         lambda x: np.array(x)[None],  # make a batch
     ])
-    dataset = get_imagenet('val', transform)
+    dataset = get_imagenet('val_3', transform)
     x_large, y = dataset[args.id]
     y_onehot = np.eye(1000)[[y]]
     logger.info(f'Load source image: id {args.id}, label {y}, shape {x_large.shape}, dtype {x_large.dtype}.')
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     attack_cls = CarliniL2Method
     kwargs = dict(
         confidence=0,
-        max_iter=100,
+        max_iter=200,
         binary_search_steps=20,
         targeted=False,
         verbose=False,
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     # Attack small
     adv_small = attack_small.generate(x_small, y_onehot)
     print('Attack small:', la.norm(adv_small - x_small), classifier_small.predict(adv_small).argmax(1))
-    savefig(adv_small, 'test0.png')
+    savefig(adv_small, f'{args.id}.test0.png')
 
     classifier_list = [
         classifier_large_unprotected,
@@ -124,6 +124,6 @@ if __name__ == '__main__':
     ]
     for i, (a, c) in enumerate(zip(attack_list, classifier_list), start=1):
         adv_large = a.generate(x_large, y_onehot)
-        savefig(adv_large, f'test{i}.png')
+        savefig(adv_large, f'{args.id}.test{i}.png')
         print(f'Attack {i}:', la.norm(adv_large - x_large) / api.ratio,
               [c.predict(adv_large).argmax(1) for c in classifier_list])
