@@ -71,7 +71,6 @@ class MySimBA(EvasionAttack):
         stride: int = 1,
         targeted: bool = False,
         batch_size: int = 1,
-        max_query: int = 1000,
     ):
         """
         Create a SimBA (dct) attack instance.
@@ -100,7 +99,7 @@ class MySimBA(EvasionAttack):
 
         # Set query count
         self.nb_query = 0
-        self.max_query = max_query
+        self.log = []
 
         pred = self.estimator.predict
         def _pred(obj, x, batch_size=1, *args, **kwargs):
@@ -119,6 +118,7 @@ class MySimBA(EvasionAttack):
         """
         x = x.astype(ART_NUMPY_DTYPE)
         preds = self.estimator.predict(x, batch_size=self.batch_size)
+        original_x = x.copy()
 
         if y is None:
             if self.targeted:
@@ -263,8 +263,11 @@ class MySimBA(EvasionAttack):
                     term_flag = 1
 
             nb_iter = nb_iter + 1
-            if nb_iter % 1 == 0:
-                print(nb_iter, self.nb_query, end='\r')
+            if nb_iter % 50 == 0 or term_flag == 1:
+                print(nb_iter, self.nb_query, current_label, end='\r')
+
+            dist = np.linalg.norm(original_x - x)
+            self.log.append((nb_iter, self.nb_query, dist, current_label))
 
         print()
         if nb_iter < self.max_iter:
