@@ -1,5 +1,5 @@
 # core
-numpy
+numpy==1.19.3
 scipy
 opencv-python
 Pillow

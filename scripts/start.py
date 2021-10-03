@@ -1,10 +1,12 @@
 import os
+from itertools import cycle
 
 """Run SimBA on small images.
 """
-for i in range(8):
-    cmd = f'nohup python -u -m exp.attack_all_simba' \
-          f' -l {i} -r 233 -s 8 -g 3 --query 20000' \
+n_job = 12
+for i, gpu in zip(range(n_job), cycle([0, 1, 2, 3])):
+    cmd = f'nohup python -u -m exp.attack_all_simba_small' \
+          f' -l {i} -r 233 -s {n_job} -g {gpu} --query 20000' \
           f' 2>&1 > static/log/simba_small_{i}.log &'
     os.system(cmd)
 

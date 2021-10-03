@@ -12,13 +12,10 @@ from exp.utils import savefig
 from scaleadv.attacks.simba import MySimBA
 from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
+from scaleadv.defenses.preprocessor import SaveAndLoadPyTorch
 from scaleadv.models.resnet import IMAGENET_MODEL_PATH, resnet50
 from scaleadv.scaling import *
 
-"""
-Run SimBA on small images.
-for i in `seq 0 8`; dopython -m exp.attack_all_simba -l $i -r 232 -s 8 -g 3); done
-"""
 
 def attack_one(id, setid=False):
     src, y_src = dataset[id] if setid else dataset[id_list[id]]
@@ -28,16 +25,21 @@ def attack_one(id, setid=False):
     scaling_api = ScalingAPI(src.shape[-2:], (224, 224), args.lib, args.alg)
     x_small = scaling_api(src[0])[None]
 
-    classifier = PyTorchClassifier(small_network, nn.CrossEntropyLoss(), x_small.shape[1:], 1000, clip_values=(0, 1))
+    classifier = PyTorchClassifier(small_network, nn.CrossEntropyLoss(), x_small.shape[1:], 1000, clip_values=(0, 1),
+                                   preprocessing_defences=SaveAndLoadPyTorch())
     logger.info(f'Predicted x_small as {classifier.predict(x_small).argmax(1)}.')
 
     # Attack
-    attack = MySimBA(classifier, 'px', max_iter=args.query, epsilon=0.2)
+    attack = MySimBA(classifier, 'dct', max_iter=args.query, epsilon=0.2)
     x_small_adv = attack.generate(x_small)
     logger.info(f'Predicted x_small_adv as {classifier.predict(x_small_adv).argmax(1)}.')
 
     pickle.dump(attack.log, open(f'{pref}.log', 'wb'))
     savefig(x_small_adv, f'{pref}.png')
+
+    # # reload
+    # x_reload = to_tensor(Image.open(f'{pref}.png')).numpy()[None]
+    # logger.info(f'Predicted reloaded adv as {classifier.predict(x_reload).argmax(1)}.')
 
 
 if __name__ == '__main__':
