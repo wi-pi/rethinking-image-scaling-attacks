@@ -88,7 +88,8 @@ class ScaleAttack(object):
             for i in pbar:
                 # forward
                 att = tanh_to_img(var)
-                att_pooling = self.classifier_big.smart_pooling(att)
+                # TODO: compress pooling and scaling as a generic "projection"
+                att_pooling = self.pooling_layer(att)
                 inp = self.scaling_layer(att_pooling)
 
                 # loss
@@ -107,12 +108,12 @@ class ScaleAttack(object):
                     'tgt': f'{loss_tgt.cpu().item():.3f}',
                     'tot': f'{loss_total.cpu().item():.3f}',
                 })
-                if i % 20 == 0:
-                    n = att_pooling.shape[0]
-                    pred = self.classifier_big.predict(att.detach().cpu().repeat(n, 1, 1, 1)).argmax(1)
-                    acc_src = np.mean(pred == src_label)
-                    if acc_src < 0.01:
-                        break
+                # if i % 20 == 0:
+                #     n = att_pooling.shape[0]
+                #     pred = self.classifier_big.predict(att.detach().cpu().repeat(n, 1, 1, 1)).argmax(1)
+                #     acc_src = np.mean(pred == src_label)
+                #     if acc_src < 0.01:
+                #         break
 
         att = att.detach().cpu().numpy()
         return att
