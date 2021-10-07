@@ -5,10 +5,11 @@ import torch
 import torchvision.transforms.functional as F
 from PIL import Image
 
-from scaleadv.models.layers import ScalingLayer
-from scaleadv.scaling import ScalingAPI, ScalingLib, ScalingAlg, ShapeType
-from scaleadv.scaling.backends.cv import ScalingBackendCV
-from scaleadv.scaling.backends.pil import ScalingBackendPIL
+from scaleadv.scaling.api import ScalingAPI
+from scaleadv.scaling.backend import Shape
+from scaleadv.scaling.cv import ScalingBackendCV
+from scaleadv.scaling.enum import ScalingAlg, ScalingLib
+from scaleadv.scaling.pil import ScalingBackendPIL
 
 lib_list = list(ScalingLib)
 alg_list = list(ScalingAlg)
@@ -16,7 +17,7 @@ src_list = [(666, 555), (333, 444)]
 tgt_list = [(555, 444), (333, 222), (111, 66)]
 
 
-def _setup(src_shape: ShapeType, tgt_shape: ShapeType, lib: ScalingLib, alg: ScalingAlg):
+def _setup(src_shape: Shape, tgt_shape: Shape, lib: ScalingLib, alg: ScalingAlg):
     # Generate random image
     shape = src_shape + (3,)
     img = np.random.randint(256, size=shape, dtype=np.uint8)
@@ -33,7 +34,7 @@ class TestScalingAPI(object):
     @pytest.mark.parametrize('src_shape', src_list)
     @pytest.mark.parametrize('tgt_shape', tgt_list)
     @pytest.mark.parametrize('alg', alg_list)
-    def test_pil_api(self, src_shape: ShapeType, tgt_shape: ShapeType, alg: ScalingAlg):
+    def test_pil_api(self, src_shape: Shape, tgt_shape: Shape, alg: ScalingAlg):
         # API
         img, api_img, _ = _setup(src_shape, tgt_shape, ScalingLib.PIL, alg)
 
@@ -49,7 +50,7 @@ class TestScalingAPI(object):
     @pytest.mark.parametrize('src_shape', src_list)
     @pytest.mark.parametrize('tgt_shape', tgt_list)
     @pytest.mark.parametrize('alg', alg_list)
-    def test_cv_api(self, src_shape: ShapeType, tgt_shape: ShapeType, alg: ScalingAlg):
+    def test_cv_api(self, src_shape: Shape, tgt_shape: Shape, alg: ScalingAlg):
         # API
         img, api_img, api = _setup(src_shape, tgt_shape, ScalingLib.CV, alg)
         api_img = np.clip(api_img, 0, 1)
@@ -68,7 +69,7 @@ class TestScalingAPI(object):
     @pytest.mark.parametrize('tgt_shape', tgt_list)
     @pytest.mark.parametrize('lib', lib_list)
     @pytest.mark.parametrize('alg', alg_list)
-    def test_matrix(self, src_shape: ShapeType, tgt_shape: ShapeType, lib: ScalingLib, alg: ScalingAlg):
+    def test_matrix(self, src_shape: Shape, tgt_shape: Shape, lib: ScalingLib, alg: ScalingAlg):
         # By API
         img, api_img, api = _setup(src_shape, tgt_shape, lib, alg)
 
@@ -84,7 +85,7 @@ class TestScalingAPI(object):
     @pytest.mark.parametrize('tgt_shape', tgt_list)
     @pytest.mark.parametrize('lib', lib_list)
     @pytest.mark.parametrize('alg', alg_list)
-    def test_mask_shape(self, src_shape: ShapeType, tgt_shape: ShapeType, lib: ScalingLib, alg: ScalingAlg):
+    def test_mask_shape(self, src_shape: Shape, tgt_shape: Shape, lib: ScalingLib, alg: ScalingAlg):
         api = ScalingAPI(src_shape, tgt_shape, lib, alg)
         assert api.mask.shape == src_shape
 
@@ -95,7 +96,7 @@ class TestScalingLayer(object):
     @pytest.mark.parametrize('tgt_shape', tgt_list)
     @pytest.mark.parametrize('lib', lib_list)
     @pytest.mark.parametrize('alg', alg_list)
-    def test_scaling_layer(self, src_shape: ShapeType, tgt_shape: ShapeType, lib: ScalingLib, alg: ScalingAlg):
+    def test_scaling_layer(self, src_shape: Shape, tgt_shape: Shape, lib: ScalingLib, alg: ScalingAlg):
         # Generate random image
         img = np.random.rand(3, *src_shape).astype(np.float32)
 
@@ -104,6 +105,7 @@ class TestScalingLayer(object):
         api_img = api(img)
 
         # Scaling layer
+        from scaleadv.models import ScalingLayer
         scaling = ScalingLayer.from_api(api).cuda()
         img = torch.tensor(img)[None, ...].cuda()
         scaling_img = scaling(img)[0].cpu().numpy()

@@ -1,7 +1,11 @@
+"""
+This module implements the OpenCV scaling backend.
+"""
 import cv2 as cv
 import numpy as np
 
-from . import ScalingBackend, ShapeType, ScalingAlg
+from scaleadv.scaling.backend import ScalingBackend, Shape
+from scaleadv.scaling.enum import ScalingAlg
 
 
 class ScalingBackendCV(ScalingBackend):
@@ -13,6 +17,6 @@ class ScalingBackendCV(ScalingBackend):
         ScalingAlg.AREA: cv.INTER_AREA,
     }
 
-    def _scale(self, x: np.ndarray, shape: ShapeType) -> np.ndarray:
+    def _scale(self, x: np.ndarray, shape: Shape) -> np.ndarray:
         x = cv.resize(x, shape, interpolation=self.alg)
         return x

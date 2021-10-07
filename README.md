@@ -2,10 +2,15 @@
 
 Understanding the real potential of Image-Scaling attacks.
 
-## Install
+## Setup Environment
+```sh
+conda create -n scaling python=3.9
+conda activate scaling
+conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch -c nvidia
 
-* Clone this repository with `git clone --recursive git@github.com:wi-pi/Scale-Adv.git`
-* Install PyTorch and run `pip install -f requirements.txt`
+git clone git@github.com:wi-pi/Scale-Adv.git
+pip install -r requirements.txt
+```
 
 ## Prerequisites
 

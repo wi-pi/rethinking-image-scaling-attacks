@@ -64,7 +64,7 @@ def plot(det):
     print(len(score_src))
 
     # Eval
-    fig, axes = plt.subplots(ncols=2, figsize=(6, 3), constrained_layout=True)
+    fig, axes = plt.subplots(ncols=2, figsize=(4, 2), constrained_layout=True)
     for i, name in enumerate(['MSE', 'SSIM']):
         ss, sa = [list(zip(*arr))[i] for arr in [score_src, score_att]]
         sns.distplot(ss, kde=False, label='Benign', ax=axes[i])
@@ -77,12 +77,14 @@ def plot(det):
     fig.suptitle(f'{det.name.title()} Defense ({QUERIES // 1000}K Queries)')
     fig.savefig(f'det-bb-{DEFENSE}-{det.name}.{QUERIES}.{RATIO}.pdf')
 
+    from IPython import embed; embed(using=False); exit()
+
 
 # Get detection
 det = [
     Unscaling(scale_down, scale_up, pooling_layer),
-    MinimumFilter(),
+    # MinimumFilter(),
 ]
-set_ccs_font(14)
+set_ccs_font(12)
 for d in det:
     plot(d)

@@ -10,7 +10,10 @@ from scaleadv.utils import set_ccs_font
 def load_data(fmt):
     data = []
     for i in id_list:
-        d = pickle.load(open(fmt.format(i), 'rb'))
+        try:
+            d = pickle.load(open(fmt.format(i), 'rb'))
+        except:
+            continue
         _, query, pert = map(np.array, zip(*d))
         pos = np.argmax(query >= query_budgets[..., None] * 1000, axis=1)  # first occurrence
         data.append(pert[pos])
@@ -30,6 +33,22 @@ def plot_pert_vs_queries():
     plt.ylabel(r'Distance ($\ell_2$)')
     plt.grid(True)
     plt.savefig(f'bb-l2-vs-queries.pdf')
+
+
+def plot_pert_vs_queries_median():
+    set_ccs_font(10)
+    plt.figure(figsize=(3, 3), constrained_layout=True)
+    for a, b in [(1, 9), (2, 8), (3, 7), (4, 6)][::-1]:
+        data_median = load_data('static/bb_med%d%d/{}.ratio_3.def_median.log' % (a, b)) / 3
+        plt.plot(query_budgets, np.median(data_median, 1), label=rf'Scale-Adv ($a = 0.{a}, b = 0.{b}$)')
+    plt.plot(query_budgets, np.median(data_hsj, 1), ls='--', c='k', label='HopSkipJump')
+    plt.legend(borderaxespad=0.5, fontsize=9)
+    plt.yscale('log')
+    plt.xticks(list(range(0, 26, 5)), [f'{i}K' for i in range(0, 26, 5)])
+    plt.xlabel('Number of Queries')
+    plt.ylabel(r'Distance ($\ell_2$)')
+    plt.grid(True)
+    plt.savefig(f'bb-l2-vs-queries-median.pdf')
 
 
 def plot_sar_vs_pert():
@@ -79,15 +98,16 @@ if __name__ == '__main__':
     BLUE, ORANGE, GREEN, RED = plt.rcParams['axes.prop_cycle'].by_key()['color'][:4]
 
     id_list = range(0, 100)
-    query_budgets = np.arange(1, 26)
+    query_budgets = np.array([0.1, 0.2, 0.5, 1, 5, 10])#np.arange(1, 26)
     pert_budgets = np.arange(0, 2.1, 0.1)
 
     # load data
     data_hsj = load_data('static/bb/{}.ratio_1.def_none.log')
     data_none = load_data('static/bb/{}.ratio_3.def_none.log') / 3
-    data_median = load_data('static/bb_med37/{}.ratio_3.def_median.log') / 3
+    data_median = load_data('static/bb_med28/{}.ratio_3.def_median.log') / 3
     print('data loaded:', data_hsj.shape, data_none.shape, data_median.shape)
 
     # plot data
-    plot_pert_vs_queries()
-    plot_sar_vs_pert()
+    # plot_pert_vs_queries()
+    # plot_sar_vs_pert()
+    plot_pert_vs_queries_median()
