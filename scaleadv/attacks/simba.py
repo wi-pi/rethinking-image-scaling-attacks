@@ -263,10 +263,10 @@ class MySimBA(EvasionAttack):
                     term_flag = 1
 
             nb_iter = nb_iter + 1
-            if nb_iter % 50 == 0 or term_flag == 1:
-                print(nb_iter, self.nb_query, current_label, end='\r')
-
             dist = np.linalg.norm(original_x - x)
+            if nb_iter % 50 == 0 or term_flag == 1:
+                print(nb_iter, self.nb_query, current_label, dist, end='\n')
+
             self.log.append((nb_iter, self.nb_query, dist, current_label))
 
         print()
