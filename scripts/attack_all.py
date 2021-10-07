@@ -18,7 +18,7 @@ from scaleadv.evaluate import Evaluator
 from scaleadv.evaluate.utils import ImageManager, DataManager
 from scaleadv.models import ScalingLayer
 from scaleadv.models.resnet import IMAGENET_MODEL_PATH, resnet50
-from scaleadv.scaling import ScalingLib, ScalingAlg, ScalingAPI
+from scaleadv.scaling import ScalingLib, ScalingAlg, ScalingAPI, str_to_alg, str_to_lib
 from scaleadv.utils import get_id_list_by_ratio
 
 
@@ -50,7 +50,7 @@ def run_att(action: str):
     attack = ScaleAttack(scaling_api, pooling_layer, class_network, nb_samples=20, nb_flushes=20)
 
     for eps in eps_list:
-        for i in tqdm(id_list, desc=f'Scaling Attack {action.title()} (eps {eps})'):
+        for i in tqdm(id_list[:1], desc=f'Scaling Attack {action.title()} (eps {eps})'):
             src, y_src = dataset[i]
             adv = im.load_adv(i, eps)
             y_adv = classifier.predict(adv).argmax(1).item()
@@ -80,8 +80,8 @@ if __name__ == '__main__':
     _('action', type=str, choices=('adv', 'hide', 'generate'), help='which image to generate')
     _('--model', default='none', type=str, choices=IMAGENET_MODEL_PATH.keys(), help='use robust model, optional')
     # Scaling args
-    _('--lib', default='cv', type=str, choices=ScalingLib.names(), help='scaling libraries')
-    _('--alg', default='linear', type=str, choices=ScalingAlg.names(), help='scaling algorithms')
+    _('--lib', default='cv', type=str, choices=str_to_lib.keys(), help='scaling libraries')
+    _('--alg', default='linear', type=str, choices=str_to_alg.keys(), help='scaling algorithms')
     _('--scale', default=3, type=int, help='set a fixed scale ratio, unset to use the original size')
     # Scaling attack args
     _('--defense', default='none', type=str, choices=POOLING_MAPS.keys(), help='type of defense')
@@ -109,8 +109,8 @@ if __name__ == '__main__':
     id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_{args.scale}.pkl', 'rb'))
     id_list = get_id_list_by_ratio(id_list, args.scale)
     eps_list = list(range(args.left, args.right, args.step))
-    im = ImageManager(scaling_api)
-    dm = DataManager(scaling_api)
+    im = ImageManager(scaling_api, tag='.tmp')
+    dm = DataManager(scaling_api, tag='.tmp')
     e = Evaluator(scaling_api, class_network, nb_samples=40)
 
     if args.action == 'adv':

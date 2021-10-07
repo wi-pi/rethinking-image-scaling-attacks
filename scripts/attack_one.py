@@ -15,7 +15,7 @@ from scaleadv.defenses import POOLING_MAPS
 from scaleadv.evaluate import Evaluator
 from scaleadv.models import resnet50
 from scaleadv.models.resnet import IMAGENET_MODEL_PATH
-from scaleadv.scaling import ScalingAPI, ScalingLib, ScalingAlg
+from scaleadv.scaling import ScalingAPI, ScalingLib, ScalingAlg, str_to_alg, str_to_lib
 
 NORM = {
     '2': 2,
@@ -29,8 +29,8 @@ if __name__ == '__main__':
     _('--id', type=int, required=True, help='ID of test image')
     _('--model', default=None, type=str, choices=IMAGENET_MODEL_PATH.keys(), help='use robust model, optional')
     # Scaling args
-    _('--lib', default='cv', type=str, choices=ScalingLib.names(), help='scaling libraries')
-    _('--alg', default='linear', type=str, choices=ScalingAlg.names(), help='scaling algorithms')
+    _('--lib', default='cv', type=str, choices=str_to_lib.keys(), help='scaling libraries')
+    _('--alg', default='linear', type=str, choices=str_to_alg.keys(), help='scaling algorithms')
     _('--scale', default=None, type=int, help='set a fixed scale ratio, unset to use the original size')
     # Adversarial attack args
     _('--norm', default='2', type=str, choices=NORM.keys(), help='adv-attack norm')
@@ -39,6 +39,7 @@ if __name__ == '__main__':
     # Scaling attack args
     _('--defense', default='none', type=str, choices=POOLING_MAPS.keys(), help='type of defense')
     _('--samples', default=1, type=int, help='number of samples to approximate random pooling')
+    _('--cache', default=20, type=int, help='number of iters to cache noise')
     _('--std', default=1.0, type=float, help='std of non-uniform random pooling')
     # Misc args
     _('--tag', default='TEST', type=str, help='prefix of names')
@@ -86,9 +87,9 @@ if __name__ == '__main__':
     norm, eps, max_iter = args.norm, args.eps, args.step
     eps_step = eps * 10 / max_iter
     logger.info(f'Loading PGD attack: norm {norm}, eps {eps:.3f}, eps_step {eps_step:.3f}, max_iter {max_iter}.')
-    # adv_attack = PGD(classifier, norm, eps, eps_step, max_iter, targeted=True, verbose=False)
-    adv_attack = CarliniL2Method(classifier, confidence=args.eps, binary_search_steps=30, max_iter=20, targeted=True)
-    adv = adv_attack.generate(inp, np.array([90]))
+    adv_attack = PGD(classifier, norm, eps, eps_step, max_iter, targeted=False, verbose=False)
+    # adv_attack = CarliniL2Method(classifier, confidence=args.eps, binary_search_steps=30, max_iter=20, targeted=True)
+    adv = adv_attack.generate(inp, np.array([y_src]))
 
     # Initial test
     y_inp = classifier.predict(inp).argmax(1).item()
@@ -97,18 +98,19 @@ if __name__ == '__main__':
     logger.info(f'Initial prediction: adv = {y_adv}.')
 
     # Scaling attack
-    attack = ScaleAttack(scaling_api, pooling_layer, class_network, nb_samples=args.samples, verbose=True)
+    attack = ScaleAttack(scaling_api, pooling_layer, class_network, nb_samples=args.samples, nb_flushes=args.cache, verbose=True)
     if args.action == 'hide':
         att = attack.hide(src, adv, y_src, y_adv, args.iter, args.lr, args.weight, verbose=True)
     elif args.action == 'generate':
-        # attack_kwargs = dict(norm=args.norm, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step)
-        attack_kwargs = dict(confidence=args.eps, binary_search_steps=30, max_iter=20, targeted=True)
+        attack_kwargs = dict(norm=args.norm, eps=args.big_eps, eps_step=args.big_sig, max_iter=args.big_step)
+        # attack_kwargs = dict(confidence=args.eps, binary_search_steps=30, max_iter=20, targeted=True)
         logger.info('Start generating...')
-        att = attack.generate(src, 90, CarliniL2Method, attack_kwargs)
+        # att = attack.generate(src, 90, CarliniL2Method, attack_kwargs)
+        att = attack.generate(src, y_src, PGD, attack_kwargs)
         logger.info('Done generating...')
     else:
         raise NotImplementedError
 
     # Evaluate
-    e = Evaluator(scaling_api, class_network, nb_samples=1)
+    e = Evaluator(scaling_api, class_network, nb_samples=50)
     e.eval(src, adv, att, y_src, y_adv, tag=f'test.{args.id}.{args.action}.{args.defense}', show=True, save='.')
