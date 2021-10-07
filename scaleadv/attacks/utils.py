@@ -53,19 +53,23 @@ class SmartPooling(nn.Module):
             self.nb_iter += 1
             return self.pooling_layer(x)
 
+
         # expectation part
         xp = self.pooling_layer.apply_padding(x)
         xp = nnf.conv2d(xp.transpose(0, 1), self.prob_kernel).transpose(0, 1)
         x = xp * self.pooling_layer.mask + x * (1 - self.pooling_layer.mask)  # NOTE: this mask is important!
 
-        # noise part
+        # Option 1: we don't sample noise
+        if self.nb_flushes == 0:
+            return x
+
+        # Option 2: we sample noise
         if self.nb_iter % self.nb_flushes == 0:
             x_rep = x.repeat(self.nb_samples, 1, 1, 1)
             self.cache = self.pooling_layer(x_rep).data - x_rep.data
 
-        x = torch.clamp(x + self.cache, 0, 1)
-
         self.nb_iter += 1
+        x = torch.clamp(x + self.cache, 0, 1)
         return x
 
 
