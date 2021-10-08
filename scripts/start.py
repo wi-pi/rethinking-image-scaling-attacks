@@ -31,20 +31,21 @@ from itertools import cycle
 
 """TODO: Run HSJA (no defense) without smart noise.
 """
-n_job = 4
-gpus = [0, 1, 2, 3]
-for i, gpu in zip(range(n_job), cycle(gpus)):
-    cmd = f'nohup python -m scripts.blackbox' \
-          f' --scale 3 --defense none -l {i} -r 100 -s {n_job} -g {gpu} --no-smart-noise --tag badnoise' \
-          f' 2>&1 > static/log/bb_none_bad_{i}.log &'
-    os.system(cmd)
-
-
-"""TODO: Run HSJA (median defense) without smart median.
-"""
 # n_job = 4
 # gpus = [0, 1, 2, 3]
 # for i, gpu in zip(range(n_job), cycle(gpus)):
 #     cmd = f'nohup python -m scripts.blackbox' \
-#           f' --scale 3 --defense median -l {i} -r 100 -s {n_job * 4} -g {gpu} --no-smart-median' \
-#           f' 2>&1 > static/log/bb_median_bad_{i}.log &'
+#           f' --scale 3 --defense none -l {i} -r 100 -s {n_job} -g {gpu} --no-smart-noise --tag badnoise' \
+#           f' 2>&1 > static/log/bb_none_bad_{i}.log &'
+#     os.system(cmd)
+
+
+"""TODO: Run HSJA (median defense) without smart median.
+"""
+n_job = 4
+gpus = [0, 1, 2, 3]
+for i, gpu in zip(range(n_job), cycle(gpus)):
+    cmd = f'nohup python -m scripts.blackbox' \
+          f' --scale 3 --defense median -l {i} -r 100 -s {n_job} -g {gpu} --no-smart-median --tag badmedian' \
+          f' 2>&1 > static/log/bb_median_bad_{i}.log &'
+    os.system(cmd)

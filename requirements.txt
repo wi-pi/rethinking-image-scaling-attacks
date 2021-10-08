@@ -15,3 +15,6 @@ loguru
 IPython
 pytest
 prettytable
+
+# api
+tencentcloud-sdk-python
