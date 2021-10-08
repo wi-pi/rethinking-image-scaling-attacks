@@ -82,7 +82,7 @@ if __name__ == '__main__':
     dataset = get_imagenet('val' if INSTANCE_TEST else f'val_3', transform)
     id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_3.pkl', 'rb'))[::4]
 
-    root = 'static/bb_med19'
+    root = f'static/bb_{args.tag}'
     os.makedirs(root, exist_ok=True)
 
     # Load network
