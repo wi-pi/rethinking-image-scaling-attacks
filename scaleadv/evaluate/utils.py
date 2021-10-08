@@ -60,7 +60,7 @@ class ImageManager(object):
 
 
 class DataManager(object):
-    root = Path('./static/results/')
+    root = Path('./static/results_pgd/')
 
     adv_fmt = '{i}.eps_{eps}.pkl'.format
     att_fmt = '{i}.{attack}.eps_{eps}.pool_{defense}.pkl'.format

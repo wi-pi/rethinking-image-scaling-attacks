@@ -124,11 +124,41 @@ def plot_hide_generate():
     plt.savefig(f'acc-all.{args.lib}.{args.alg}.{args.scale}.pdf')
 
 
+def plot_generate_with_hide():
+    # init
+    set_ccs_font(10)
+    plt.figure(figsize=(3, 3), constrained_layout=True)
+
+    # plot generate
+    acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, 'generate')
+    plt.plot(eps_list, acc_list['adv'], ms=4, lw=1.5, c='k', label='PGD Attack (vanilla)')
+    plt.plot(pert_list['att_none'], acc_list['att_none'], marker='o', ms=4, lw=1.5, c=GREEN, label='Joint (scaling)')
+    plt.plot(pert_list['att_median'], acc_list['att_median'], marker='D', ms=4, lw=1.5, c=ORANGE, label='Joint (median)')
+    plt.plot(pert_list['att_uniform'], acc_list['att_uniform'], marker='o', ms=4, lw=1.5, c=RED, label='Joint (random)')
+
+    # plot hide
+    acc_list, pert_list, eps_list = get_acc_pert(args.lib, args.alg, args.scale, 'hide')
+    plt.plot(pert_list['att_none'], acc_list['att_none'], ls='--', ms=4, lw=1.5, c=GREEN, label='Sequential (scaling)')
+    plt.plot(pert_list['att_median'], acc_list['att_median'], ls='--', ms=4, lw=1.5, c=ORANGE, label='Sequential (median)')
+    plt.plot(pert_list['att_uniform'], acc_list['att_uniform'], ls='--', ms=4, lw=1.5, c=RED, label='Sequential (random)')
+
+    # misc
+    plt.xlim(-0.5, args.right + 0.5)
+    plt.xticks(list(range(0, args.right + 1, 2)), fontsize=12)
+    plt.xlabel(r'Perturbation Budget (scaled $\ell_2$)')
+    plt.ylim(-2, 102)
+    plt.yticks(list(range(0, 101, 20)), fontsize=12)
+    plt.ylabel('Accuracy (%)')
+    plt.legend(borderaxespad=0.5)
+    plt.grid(True)
+    plt.savefig(f'acc-gen-vs-hide.{args.scale}.pdf')
+
+
 if __name__ == '__main__':
     p = ArgumentParser()
     _ = p.add_argument
     # Input args
-    _('eval', type=str, choices=('hide', 'generate', 'all'), help='which attack to evaluate')
+    _('eval', type=str, choices=('hide', 'generate', 'all', 'vs'), help='which attack to evaluate')
     _('--model', default='none', type=str, choices=IMAGENET_MODEL_PATH.keys(), help='use robust model, optional')
     # Scaling args
     _('--lib', default='cv', type=str, choices=str_to_lib.keys(), help='scaling libraries')
@@ -145,5 +175,7 @@ if __name__ == '__main__':
 
     if args.eval == 'all':
         plot_hide_generate()
+    elif args.eval == 'vs':
+        plot_generate_with_hide()
     else:
         plot_all()
