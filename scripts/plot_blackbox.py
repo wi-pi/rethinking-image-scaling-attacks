@@ -58,7 +58,7 @@ def plot_pert_vs_queries_sns():
     plt.figure(figsize=(3, 3), constrained_layout=True)
     plt.plot(query_budgets, np.median(data_none, 1), marker='o', ms=4, lw=1.5, c=GREEN, label='HSJ Attack (scaling w/ SNS)')
     plt.plot(query_budgets, np.median(data_badnoise, 1), marker='^', ms=4, lw=1.5, c=ORANGE, label='HSJ Attack (scaling w/o SNS)')
-    plt.plot(query_budgets, np.median(data_hsj, 1), marker='D', ms=4, lw=1.5, c='k', label='HSJ Attack (vanilla)')
+    plt.plot(query_budgets, np.median(data_hsj, 1), ls='--', ms=4, lw=1.5, c='k', label='HSJ Attack (vanilla)')
     plt.legend(borderaxespad=0.5)
     plt.yscale('log')
     plt.xticks(list(range(0, 26, 5)), [f'{i}K' for i in range(0, 26, 5)])
@@ -69,13 +69,13 @@ def plot_pert_vs_queries_sns():
 
 
 def plot_pert_vs_queries_smooth():
-    data_badmedian = load_data('static/bb_badmedian/{}.ratio_3.def_none.log') / 3
+    data_badmedian = load_data('static/bb_badmedian/{}.ratio_3.def_median.log') / 3
 
     set_ccs_font(10)
     plt.figure(figsize=(3, 3), constrained_layout=True)
-    plt.plot(query_budgets, np.median(data_median, 1), marker='o', ms=4, lw=1.5, c=GREEN, label='HSJ Attack (smoothed median)')
-    plt.plot(query_budgets, np.median(data_badmedian, 1), marker='^', ms=4, lw=1.5, c=ORANGE, label='HSJ Attack (vanilla median)')
-    plt.plot(query_budgets, np.median(data_hsj, 1), marker='D', ms=4, lw=1.5, c='k', label='HSJ Attack (vanilla)')
+    plt.plot(query_budgets, np.median(data_median, 1), marker='o', ms=4, lw=1.5, c=GREEN, label='HSJ Attack (median w/ smooth)')
+    plt.plot(query_budgets, np.median(data_badmedian, 1), marker='^', ms=4, lw=1.5, c=ORANGE, label='HSJ Attack (median w/o smooth)')
+    plt.plot(query_budgets, np.median(data_hsj, 1), ls='--', ms=4, lw=1.5, c='k', label='HSJ Attack (vanilla)')
     plt.legend(borderaxespad=0.5)
     plt.yscale('log')
     plt.xticks(list(range(0, 26, 5)), [f'{i}K' for i in range(0, 26, 5)])
@@ -143,8 +143,8 @@ if __name__ == '__main__':
     print('data loaded:', data_hsj.shape, data_none.shape, data_median.shape)
 
     # plot data
-    plot_pert_vs_queries()
-    plot_sar_vs_pert()
-    plot_pert_vs_queries_median()
-    plot_pert_vs_queries_sns()
-    # plot_pert_vs_queries_smooth()
+    # plot_pert_vs_queries()
+    # plot_sar_vs_pert()
+    # plot_pert_vs_queries_median()
+    # plot_pert_vs_queries_sns()
+    plot_pert_vs_queries_smooth()
