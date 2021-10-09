@@ -66,8 +66,8 @@ class SaveAndLoadPyTorch(PreprocessorPyTorch):
         super().__init__(apply_fit=False, apply_predict=True)
 
     def forward(self, x: torch.Tensor, y: Optional[torch.Tensor] = None):
-        x = x[0]
+        # x = x[0]
         x = x.mul(255).byte()
         x = x.div(255).float()
-        x = x[None]
+        # x = x[None]
         return x, y

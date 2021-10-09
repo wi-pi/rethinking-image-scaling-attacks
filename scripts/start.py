@@ -42,10 +42,21 @@ from itertools import cycle
 
 """TODO: Run HSJA (median defense) without smart median.
 """
+# n_job = 4
+# gpus = [0, 1, 2, 3]
+# for i, gpu in zip(range(n_job), cycle(gpus)):
+#     cmd = f'nohup python -m scripts.blackbox' \
+#           f' --scale 3 --defense median -l {i} -r 100 -s {n_job} -g {gpu} --no-smart-median --tag badmedian' \
+#           f' 2>&1 > static/log/bb_median_bad_{i}.log &'
+#     os.system(cmd)
+
+
+"""Run HSJA on small images.
+"""
 n_job = 4
 gpus = [0, 1, 2, 3]
 for i, gpu in zip(range(n_job), cycle(gpus)):
-    cmd = f'nohup python -m scripts.blackbox' \
-          f' --scale 3 --defense median -l {i} -r 100 -s {n_job} -g {gpu} --no-smart-median --tag badmedian' \
-          f' 2>&1 > static/log/bb_median_bad_{i}.log &'
+    cmd = f'nohup python -m exp.attack_all_hsj_small' \
+          f' --scale 3 -l {i} -r 100 -s {n_job} -g {gpu} --tag small' \
+          f' 2>&1 > static/log/bb_small_{i}.log &'
     os.system(cmd)
