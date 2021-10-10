@@ -113,7 +113,7 @@ if __name__ == '__main__':
     # root = '/u/g/y/gy/disk/Scale-Attack/Scale-Adv/bb_test.'
     # budget = 5  # [budget]K
     id_list = range(0, 98, 2)
-    budget_list = [1, 3, 7, 9]
+    budget_list = [15, 20, 25]  # done: 1 3 5 7 9 10
     attack = Attack(src_shape=(672, 672, 3), tar_shape=(224, 224, 3))
 
 
@@ -124,13 +124,12 @@ if __name__ == '__main__':
 
     def get_tar(i: int, query: int):
         log = load(open(f'{root}{i}.ratio_3.def_none.log', 'rb'))
-
-        pic = None
         for j, q, l2 in log:
             if q >= query:
-                pic = Image.open(f'{root}{i}.ratio_3.def_none.{j:02d}.png')
                 break
 
+        # j must be defined if log is not empty
+        pic = Image.open(f'{root}{i}.ratio_3.def_none.{j:02d}.png')
         return np.array(pic)
 
 
