@@ -111,9 +111,8 @@ if __name__ == '__main__':
     # setup
     root = '/u/g/y/gy/disk/Scale-Attack/Scale-Adv/static/bb_small/'
     # root = '/u/g/y/gy/disk/Scale-Attack/Scale-Adv/bb_test.'
-    # budget = 5  # [budget]K
-    id_list = range(0, 98, 2)
-    budget_list = [15, 20, 25]  # done: 1 3 5 7 9 10
+    id_list = range(1, 98, 2)
+    budget_list = [1, 3, 5, 20]  # done: 1 3 5 7 9 10 15 20 25
     attack = Attack(src_shape=(672, 672, 3), tar_shape=(224, 224, 3))
 
 
