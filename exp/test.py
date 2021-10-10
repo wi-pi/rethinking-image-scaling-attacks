@@ -1,6 +1,8 @@
 ### Defense 2, Adaptive Attack (Section 5.5)###
 # We evaluate our defenses against an adaptive adversary who is aware of the defenses
 # and adapts her attack accordingly.
+import argparse
+from itertools import product
 
 from utils.plot_image_utils import plot_images_in_actual_size
 
@@ -26,8 +28,9 @@ import time
 usecythonifavailable = True
 scaling_algorithm = SuppScalingAlgorithms.LINEAR
 scaling_library = SuppScalingLibraries.CV
-args_bandwidthfactor = 2
+args_bandwidthfactor = 1.5
 args_allowed_changes = 100 # the percentage of pixels that can be modified in each block.
+eps_list = [0.1, 0.2, 0.4, 0.8, 1, 2, 4, 8, 16]
 
 
 class Attack(object):
@@ -44,7 +47,8 @@ class Attack(object):
             lib=scaling_library,
             alg=scaling_algorithm
         )
-        self.scale_att = QuadraticScaleAttack(eps=1, verbose=False)
+        self.scale_att = QuadraticScaleAttack(eps=eps_list, verbose=True)
+        self.scale_att.optimize_runtime = True
         self.fourierpeakmatrixcollector = FourierPeakMatrixCollector(
             method=PeakMatrixMethod.optimization,
             scale_library=scaling_library,
@@ -56,14 +60,14 @@ class Attack(object):
             scaler_approach=self.scaler_approach,
             fourierpeakmatrixcollector=self.fourierpeakmatrixcollector,
             bandwidth=args_bandwidthfactor,
-            verbose_flag=False,
+            verbose_flag=True,
             usecythonifavailable=usecythonifavailable
         )
         self.adaptiveattack = AdaptiveAttackPreventionGenerator.create_adaptive_attack(
             defense_type=self.args_prevention_type,
             scaler_approach=self.scaler_approach,
             preventiondefense=self.preventiondefense,
-            verbose_flag=False,
+            verbose_flag=True,
             usecythonifavailable=usecythonifavailable,
             choose_only_unused_pixels_in_overlapping_case=False,
             allowed_changes=args_allowed_changes/100
@@ -103,31 +107,34 @@ from pickle import load
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
     # setup
-    root = '/u/g/y/gy/disk/Scale-Attack/Scale-Adv/static/bb_test'
-    budget = 1  # [budget]K
-    id_list = [0]
+    root = '/u/g/y/gy/disk/Scale-Attack/Scale-Adv/static/bb_small/'
+    # root = '/u/g/y/gy/disk/Scale-Attack/Scale-Adv/bb_test.'
+    # budget = 5  # [budget]K
+    id_list = range(0, 98, 2)
+    budget_list = [1, 3, 7, 9]
     attack = Attack(src_shape=(672, 672, 3), tar_shape=(224, 224, 3))
 
 
     def get_src(i: int):
-        pic = Image.open(f'{root}{i}.none.src_large.png')
+        pic = Image.open(f'{root}{i}.ratio_3.def_none.src_large.png')
         return np.array(pic)
 
 
     def get_tar(i: int, query: int):
-        log = load(open(f'{root}{i}.none.log', 'rb'))
+        log = load(open(f'{root}{i}.ratio_3.def_none.log', 'rb'))
 
         pic = None
         for j, q, l2 in log:
             if q >= query:
-                pic = Image.open(f'{root}{i}.none.{j:02d}.png')
+                pic = Image.open(f'{root}{i}.ratio_3.def_none.{j:02d}.png')
                 break
 
         return np.array(pic)
 
 
-    def run(i):
+    def run(i, budget):
         src = get_src(i)
         tar = get_tar(i, budget * 1000)
         return src, tar, attack.attack(src, tar)
@@ -137,15 +144,13 @@ if __name__ == '__main__':
         Image.fromarray(fig).save(f'{root}{name}.png')
 
 
-    for i in id_list:
+    for b, i in product(budget_list, id_list):
         try:
-            src, tar, (att, att_down, ada, ada_down, ts1, ts2) = run(i)
+            print('START', b, i)
+            src, tar, (att, att_down, ada, ada_down, ts1, ts2) = run(i, b)
         except Exception as err:
-            print(i, err)
+            print('ERROR', b, i, err)
         else:
-            print(i, ts1, ts2)
+            print('DONE', b, i, ts1, ts2)
             for k in 'src tar att att_down ada ada_down'.split():
-                save(locals()[k], f'{i:02d}.{budget}k.{k}')
-
-
-
+                save(locals()[k], f'{i:02d}.{b}k.{k}')

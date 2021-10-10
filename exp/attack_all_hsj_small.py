@@ -46,19 +46,6 @@ def attack_one(id, setid=False):
         smart_noise=False,
     )
 
-    def test(fname):
-        from PIL import Image
-        img = T.ToTensor()(Image.open(fname))
-        pred = classifier.predict(img[None]).argmax(1)
-        print(pred)
-
-    print(y_src)
-    test('/u/g/y/gy/disk/Scale-Attack/Scale-Adv/bb_test.0.none.src_small.png')
-    test('/u/g/y/gy/disk/Scale-Attack/Scale-Adv/bb_test.00.3k.tar.png')
-    test('/u/g/y/gy/disk/Scale-Attack/Scale-Adv/bb_test.00.3k.att_down.png')
-    test('/u/g/y/gy/disk/Scale-Attack/Scale-Adv/bb_test.00.3k.ada_down.png')
-    exit()
-
     # Run attack (images dumped in attack)
     attack.generate(x_small)
 
