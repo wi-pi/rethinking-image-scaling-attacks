@@ -10,6 +10,7 @@ from loguru import logger
 
 from exp.utils import savefig
 from scaleadv.attacks.hsj import MyHopSkipJump
+from scaleadv.attacks.sign_opt_new import SignOPT
 from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
 from scaleadv.defenses import POOLING_MAPS
@@ -36,18 +37,25 @@ def attack_one(id, setid=False):
         clip_values=(0, 1),
         preprocessing_defences=SaveAndLoadPyTorch()
     )
-    attack = MyHopSkipJump(
-        classifier,
-        max_iter=100,
-        max_eval=600,
-        max_query=args.query,
-        preprocess=None,
-        tag=pref,
-        smart_noise=False,
-    )
 
-    # Run attack (images dumped in attack)
-    attack.generate(x_small)
+    if args.attack == 'hsj':
+        attack = MyHopSkipJump(
+            classifier,
+            max_iter=100,
+            max_eval=600,
+            max_query=args.query,
+            preprocess=None,
+            tag=pref,
+            smart_noise=False,
+        )
+
+        # Run attack (images dumped in attack)
+        attack.generate(x_small)
+    elif args.attack == 'opt':
+        attack = SignOPT(classifier, k=200, preprocess=None, smart_noise=False)
+        attack.generate(x_small, y_src, alpha=0.2, beta=0.001, iterations=1000, query_limit=args.query, tag=pref)
+    else:
+        raise NotImplementedError(args.attack)
 
     # Dump
     savefig(x_large, f'{pref}.src_large.png')
@@ -75,6 +83,8 @@ if __name__ == '__main__':
     _('--tag', default='test', type=str)
     _('--no-smart-noise', action='store_true')
     _('--no-smart-median', action='store_true')
+    # Black-box attack args
+    _('--attack', default='hsj', choices=['hsj', 'opt'], help='blackbox attack')
     args = p.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = f'{args.g}'
 

@@ -140,7 +140,7 @@ class SignOPT(object):
                 if tag is not None:
                     import torchvision.transforms.functional as F
                     adv = x0 + gg * xg
-                    F.to_pil_image(adv[0]).save(f'{tag}.{i:02d}.png')
+                    F.to_pil_image(adv[0].clip(0, 1)).save(f'{tag}.{i:02d}.png')
 
                 # logging
                 query_count += grad_queries + ls_count
