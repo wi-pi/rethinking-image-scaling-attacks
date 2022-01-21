@@ -4,6 +4,7 @@ from art.estimators.classification import PyTorchClassifier
 from numpy import linalg as LA
 
 # from qpsolvers import solve_qp
+from tqdm import trange
 
 MAX_ITER = 1000
 
@@ -23,7 +24,7 @@ class SignOPT(object):
     def __init__(self, model, k=200, preprocess=None, smart_noise=False):
         self.model = SignOPT_ModelAdaptor(model)
         self.k = k
-        self.log = torch.ones(MAX_ITER, 2)
+        self.log = []
         self.preprocess = preprocess
         self.smart_noise = smart_noise
 
@@ -47,7 +48,7 @@ class SignOPT(object):
         """
         num_directions = 100
         best_theta, g_theta = None, float('inf')
-        for _ in range(num_directions):
+        for _ in trange(num_directions, desc='init'):
             # randomly sample theta from gaussian distribution
             theta = torch.randn_like(x0)
 
@@ -75,8 +76,8 @@ class SignOPT(object):
             print("Couldn't find valid initial, failed")
             return x0, 0, False, query_count, best_theta
 
-        # print(f"========> Found best distortion {g_theta:.4f} using {query_count} queries")
-        self.log[0][0], self.log[0][1] = g_theta, query_count
+        print(f"========> Found best distortion {g_theta:.4f} using {query_count} queries")
+        self.log.append((0, query_count, g_theta))
 
         """
         Gradient Descent
@@ -84,7 +85,7 @@ class SignOPT(object):
         xg, gg = best_theta, g_theta
         vg = np.zeros_like(xg)
         distortions = [gg]
-        for i in range(iterations):
+        for i in trange(iterations, desc='GD'):
             # estimate the gradint at x0 + theta
             sign_gradient, grad_queries = self.sign_grad_v1(x0, y0, xg, initial_lbd=gg, h=beta)
 
@@ -144,8 +145,9 @@ class SignOPT(object):
                 break
 
             # logging
-            self.log[i + 1][0], self.log[i + 1][1] = gg, query_count
-            if (i + 1) % 10 == 0:
+            self.log.append((i + 1, query_count, gg))
+            # self.log[i + 1][0], self.log[i + 1][1] = gg, query_count
+            if (i + 1) % 5 == 0:
                 print(f"Iteration {i+1:3d} distortion {gg:.4f} num_queries {query_count}")
 
         target = self.model.predict_label(x0 + gg * xg)
@@ -160,7 +162,7 @@ class SignOPT(object):
         sign_grad = torch.zeros_like(theta)
         queries = 0
         for i in range(self.k):
-            if self.smart_noise and self.preprocess is not None:
+            if self.smart_noise and self.preprocess:
                 u = self.get_noise(x0)
             else:
                 u = torch.randn_like(theta)
@@ -236,7 +238,7 @@ class SignOPT(object):
         delta_lr = torch.randn(1, 3, 224, 224).cuda()
         delta_hr = torch.zeros_like(x_hr).requires_grad_()
         perturbed_hr = x_hr + delta_hr
-        perturbed_lr = self.preprocess(x_hr) + delta_lr
-        loss = torch.norm(self.preprocess(perturbed_hr) - perturbed_lr)
+        perturbed_lr = self.preprocess[1](x_hr) + delta_lr
+        loss = torch.norm(self.preprocess[0](perturbed_hr) - perturbed_lr)
         loss.backward()
         return delta_hr.grad.cpu()

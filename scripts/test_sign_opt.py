@@ -16,6 +16,42 @@ from scaleadv.models import resnet50, ScalingLayer
 from scaleadv.models.resnet import IMAGENET_MODEL_PATH
 from scaleadv.scaling import ScalingAPI, str_to_alg, str_to_lib
 
+def attack_one(id, setid=False):
+    src, y_src = dataset[id] if setid else dataset[id_list[id]]
+    logger.info(f'Loading source image: id {id}, label {y_src}, shape {src.shape}, dtype {src.dtype}.')
+
+    # Load scaling
+    scaling_api = ScalingAPI(src.shape[-2:], (224, 224), args.lib, args.alg)
+    scaling_layer = ScalingLayer.from_api(scaling_api).eval().cuda()
+
+    # Load pooling
+    cls = POOLING_MAPS[args.defense]
+    pooling_layer = cls.auto(round(scaling_api.ratio) * 2 - 1, scaling_api.mask).eval().cuda()
+
+    # Load network
+    big_class_network = nn.Sequential(scaling_layer, class_network).eval().cuda()
+    def_class_network = nn.Sequential(pooling_layer, big_class_network).eval().cuda()
+
+    """Attack on full
+    Problem: now we only have a linear approximation of median filter.
+    """
+    classifier = PyTorchClassifier(def_class_network, nn.CrossEntropyLoss(), src.shape[1:], 1000, clip_values=(0, 1))
+    preprocess = [scaling_layer, scaling_layer]
+    if args.defense != 'none':
+        if args.no_smart_median:
+            preprocess = [nn.Sequential(pooling_layer, scaling_layer),
+                          nn.Sequential(pooling_layer, scaling_layer)]
+        else:
+            preprocess = [nn.Sequential(POOLING_MAPS['quantile'].like(pooling_layer), scaling_layer),
+                          nn.Sequential(pooling_layer, scaling_layer)]
+
+    # Load attack
+    attack = SignOPT(classifier, k=200, preprocess=preprocess, smart_noise=not args.no_smart_noise)
+    results = attack.generate(src, y_src, alpha=0.2, beta=0.001, iterations=1000, query_limit=args.query)
+    x_adv, x_adv_dist, _, nb_queries, x_adv_direction = results
+    pickle.dump(attack.log, open(f'{pref}.log', 'wb'))
+
+
 if __name__ == '__main__':
     p = ArgumentParser()
     _ = p.add_argument
@@ -47,33 +83,11 @@ if __name__ == '__main__':
     dataset = get_imagenet('val' if INSTANCE_TEST else f'val_3', transform)
     id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_3.pkl', 'rb'))[::4]
 
-    # Load test sample
-    src, y_src = dataset[id_list[args.id]]
-    logger.info(f'Loading source image: id {id_list[args.id]}, label {y_src}, shape {src.shape}, dtype {src.dtype}.')
-
     # Load network
     class_network = resnet50(robust=args.model, normalize=True).eval().cuda()
 
-    if args.scale != 1:
-        # Load scaling
-        scaling_api = ScalingAPI(src.shape[-2:], (224, 224), args.lib, args.alg)
-        scaling_layer = ScalingLayer.from_api(scaling_api).eval().cuda()
-
-        # Load pooling
-        cls = POOLING_MAPS[args.defense]
-        pooling_layer = cls.auto(round(scaling_api.ratio) * 2 - 1, scaling_api.mask).eval().cuda()
-
-        # Load network
-        big_class_network = nn.Sequential(scaling_layer, class_network).eval().cuda()
-        def_class_network = nn.Sequential(pooling_layer, big_class_network).eval().cuda()
-    else:
-        big_class_network = class_network
-        scaling_layer = None
-
-    # Test on BIG NO-DEFENSE network.
-    classifier = PyTorchClassifier(big_class_network, nn.CrossEntropyLoss(), src.shape[1:], 1000, clip_values=(0, 1))
-
-    # Load attack
-    attack = SignOPT(classifier, k=200, preprocess=scaling_layer, smart_noise=True)
-    results = attack.generate(src, y_src, alpha=0.2, beta=0.001, iterations=1000, query_limit=20000)
-    x_adv, x_adv_dist, _, nb_queries, x_adv_direction = results
+    # attack each one
+    if INSTANCE_TEST:
+        pref = f'opt_{args.tag}.{args.id}.{args.defense}'
+        attack_one(args.id, setid=False)
+        exit()
