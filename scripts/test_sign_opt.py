@@ -68,11 +68,12 @@ if __name__ == '__main__':
         def_class_network = nn.Sequential(pooling_layer, big_class_network).eval().cuda()
     else:
         big_class_network = class_network
+        scaling_layer = None
 
     # Test on BIG NO-DEFENSE network.
     classifier = PyTorchClassifier(big_class_network, nn.CrossEntropyLoss(), src.shape[1:], 1000, clip_values=(0, 1))
 
     # Load attack
-    attack = SignOPT(classifier, k=200)
+    attack = SignOPT(classifier, k=200, preprocess=scaling_layer, smart_noise=True)
     results = attack.generate(src, y_src, alpha=0.2, beta=0.001, iterations=1000, query_limit=20000)
     x_adv, x_adv_dist, _, nb_queries, x_adv_direction = results

@@ -20,13 +20,12 @@ class SignOPT_ModelAdaptor(object):
 
 
 class SignOPT(object):
-    def __init__(self, model, k=200):
+    def __init__(self, model, k=200, preprocess=None, smart_noise=False):
         self.model = SignOPT_ModelAdaptor(model)
         self.k = k
         self.log = torch.ones(MAX_ITER, 2)
-
-    def get_log(self):
-        return self.log
+        self.preprocess = preprocess
+        self.smart_noise = smart_noise
 
     def generate(self, x0: np.ndarray, y0: int, alpha=0.2, beta=0.001, iterations=1000, query_limit=20000):
         """ Attack the original image and return adversarial example
@@ -147,7 +146,7 @@ class SignOPT(object):
             # logging
             self.log[i + 1][0], self.log[i + 1][1] = gg, query_count
             if (i + 1) % 10 == 0:
-                print("Iteration %3d distortion %.4f num_queries %d" % (i + 1, gg, query_count))
+                print(f"Iteration {i+1:3d} distortion {gg:.4f} num_queries {query_count}")
 
         target = self.model.predict_label(x0 + gg * xg)
         print(f"Succeed distortion {gg:.4f} target {target:d} queries {query_count:d} LS queries {ls_total:d}")
@@ -161,7 +160,11 @@ class SignOPT(object):
         sign_grad = torch.zeros_like(theta)
         queries = 0
         for i in range(self.k):
-            u = torch.randn_like(theta)
+            if self.smart_noise and self.preprocess is not None:
+                u = self.get_noise(x0)
+            else:
+                u = torch.randn_like(theta)
+
             u /= u.norm(2)
             new_theta = theta + h * u
             new_theta /= new_theta.norm(2)
@@ -227,3 +230,13 @@ class SignOPT(object):
             else:
                 lbd_lo = lbd_mid
         return lbd_hi, nquery
+
+    def get_noise(self, x0: torch.Tensor):
+        x_hr = x0.clone().cuda()
+        delta_lr = torch.randn(1, 3, 224, 224).cuda()
+        delta_hr = torch.zeros_like(x_hr).requires_grad_()
+        perturbed_hr = x_hr + delta_hr
+        perturbed_lr = self.preprocess(x_hr) + delta_lr
+        loss = torch.norm(self.preprocess(perturbed_hr) - perturbed_lr)
+        loss.backward()
+        return delta_hr.grad.cpu()
