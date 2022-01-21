@@ -8,9 +8,9 @@ from art.estimators.classification import PyTorchClassifier
 from torch.autograd import Variable
 from tqdm import trange
 
-from scaleadv.attacks.utils import img_to_tanh, tanh_to_img
+from scaleadv.attacks.utils import PyTorchClassifierFull, img_to_tanh, tanh_to_img
 from scaleadv.defenses import Pooling
-from scaleadv.models import ScalingLayer
+from scaleadv.models import FullNet, ScalingLayer
 from scaleadv.scaling import ScalingAPI
 
 ART_ATTACK = TypeVar('ART_ATTACK', bound=EvasionAttack)
@@ -47,11 +47,15 @@ class ScaleAttack(object):
         self.class_network = class_network
 
         # Init art's proxy
-        # full_net = FullNet(pooling_layer, self.scaling_layer, class_network).cuda()
-        full_net = nn.Sequential(self.pooling_layer, self.scaling_layer, self.class_network).eval().cuda()
-        self.classifier_big = PyTorchClassifier(
+        full_net = FullNet(pooling_layer, self.scaling_layer, class_network).cuda()
+        # full_net = nn.Sequential(self.pooling_layer, self.scaling_layer, self.class_network).eval().cuda()
+        # self.classifier_big = PyTorchClassifier(
+        #     full_net, loss=nn.CrossEntropyLoss(), input_shape=(3,) + scaling_api.src_shape, nb_classes=1000,
+        #     clip_values=(0, 1)  # , nb_samples=nb_samples, nb_flushes=nb_flushes, verbose=verbose
+        # )
+        self.classifier_big = PyTorchClassifierFull(
             full_net, loss=nn.CrossEntropyLoss(), input_shape=(3,) + scaling_api.src_shape, nb_classes=1000,
-            clip_values=(0, 1)  # , nb_samples=nb_samples, nb_flushes=nb_flushes, verbose=verbose
+            clip_values=(0, 1), nb_samples=nb_samples, nb_flushes=nb_flushes, verbose=verbose
         )
         # self.smart_pooling = self.classifier_big.smart_pooling
 
@@ -128,6 +132,6 @@ class ScaleAttack(object):
         attack = attack_cls(self.classifier_big, **attack_kwargs)
 
         # Attack
-        att = attack.generate(src, np.array([src_label]))
+        att = attack.generate(src.numpy(), np.array([src_label]))
 
         return att

@@ -11,7 +11,7 @@ from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
 from scaleadv.evaluate.utils import DataManager
 from scaleadv.models.resnet import IMAGENET_MODEL_PATH
-from scaleadv.scaling import ScalingLib, ScalingAlg, ScalingAPI
+from scaleadv.scaling import ScalingLib, ScalingAlg, ScalingAPI, str_to_alg, str_to_lib
 from scaleadv.utils import set_ccs_font, get_id_list_by_ratio
 
 BLUE, ORANGE, GREEN, RED = plt.rcParams['axes.prop_cycle'].by_key()['color'][:4]
@@ -94,13 +94,13 @@ def plot_all():
     set_ccs_font(10)
 
     plt.figure(figsize=(3, 3), constrained_layout=True)
-    plt.plot(eps_list, pert_list['att_none'], marker='o', ms=4, lw=1.5, c=GREEN, label='Scale-Adv (none)')
-    plt.plot(eps_list, pert_list['att_median'], marker='^', ms=4, lw=1.5, c=ORANGE, label='Scale-Adv (median)')
-    plt.plot(eps_list, pert_list['adv'], marker='D', ms=4, lw=1.5, c='k', label='C&W Attack')
+    plt.plot(eps_list, pert_list['att_none'], marker='o', ms=4, lw=1.5, c=GREEN, label='C&W Attack (scaling)')
+    plt.plot(eps_list, pert_list['att_median'], marker='^', ms=4, lw=1.5, c=ORANGE, label='C&W Attack (median)')
+    plt.plot(eps_list, pert_list['adv'], marker='D', ms=4, lw=1.5, c='k', label='C&W Attack (vanilla)')
     plt.xlim(-0.5, args.right + 0.5)
     plt.xticks(list(range(0, args.right + 1, 2)), fontsize=12)
     plt.xlabel(r'Confidence ($\kappa$)')
-    plt.ylabel(r'Distance ($\ell_2$)')
+    plt.ylabel(r'Perturbation (scaled $\ell_2$)')
     plt.yscale('log')
     plt.legend(borderaxespad=0.5)
     plt.grid(True)
@@ -148,8 +148,8 @@ if __name__ == '__main__':
     # Input args
     _('--model', default='none', type=str, choices=IMAGENET_MODEL_PATH.keys(), help='use robust model, optional')
     # Scaling args
-    _('--lib', default='cv', type=str, choices=ScalingLib.names(), help='scaling libraries')
-    _('--alg', default='linear', type=str, choices=ScalingAlg.names(), help='scaling algorithms')
+    _('--lib', default='cv', type=str, choices=str_to_lib.keys(), help='scaling libraries')
+    _('--alg', default='linear', type=str, choices=str_to_alg.keys(), help='scaling algorithms')
     _('--scale', default=3, type=int, help='set a fixed scale ratio, unset to use the original size')
     # Adversarial attack args
     _('-l', '--left', default=1, type=int)
@@ -160,4 +160,4 @@ if __name__ == '__main__':
     mpl.rcParams['axes.spines.right'] = False
     mpl.rcParams['axes.spines.top'] = False
     plot_all()
-    plot_sar_vs_pert()
+    # plot_sar_vs_pert()

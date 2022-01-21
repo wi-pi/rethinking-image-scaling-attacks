@@ -14,7 +14,7 @@ from scaleadv.datasets.transforms import Align
 from scaleadv.defenses import POOLING_MAPS
 from scaleadv.models import resnet50, ScalingLayer
 from scaleadv.models.resnet import IMAGENET_MODEL_PATH
-from scaleadv.scaling import ScalingAPI, ScalingLib, ScalingAlg
+from scaleadv.scaling import ScalingAPI, ScalingLib, ScalingAlg, str_to_alg, str_to_lib
 
 
 def attack_one(id, setid=False):
@@ -39,10 +39,14 @@ def attack_one(id, setid=False):
     classifier = PyTorchClassifier(def_class_network, nn.CrossEntropyLoss(), src.shape[1:], 1000, clip_values=(0, 1))
     preprocess = [scaling_layer, scaling_layer]
     if args.defense != 'none':
-        preprocess = [nn.Sequential(POOLING_MAPS['quantile'].like(pooling_layer), scaling_layer),
-                      nn.Sequential(pooling_layer, scaling_layer)]
+        if args.no_smart_median:
+            preprocess = [nn.Sequential(pooling_layer, scaling_layer),
+                          nn.Sequential(pooling_layer, scaling_layer)]
+        else:
+            preprocess = [nn.Sequential(POOLING_MAPS['quantile'].like(pooling_layer), scaling_layer),
+                          nn.Sequential(pooling_layer, scaling_layer)]
     attack = MyHopSkipJump(classifier, max_iter=100, max_eval=600, max_query=args.query, preprocess=preprocess,
-                           tag=pref)
+                           tag=pref, smart_noise=not args.no_smart_noise)
     attack.generate(src)
     pickle.dump(attack.log, open(f'{pref}.log', 'wb'))
 
@@ -58,13 +62,15 @@ if __name__ == '__main__':
     _('-s', type=int, default=1)
     _('-g', type=int, default=0)
     # Scaling args
-    _('--lib', default='cv', type=str, choices=ScalingLib.names(), help='scaling libraries')
-    _('--alg', default='linear', type=str, choices=ScalingAlg.names(), help='scaling algorithms')
+    _('--lib', default='cv', type=str, choices=str_to_lib.keys(), help='scaling libraries')
+    _('--alg', default='linear', type=str, choices=str_to_alg.keys(), help='scaling algorithms')
     _('--scale', default=None, type=int, help='set a fixed scale ratio, unset to use the original size')
     # Scaling attack args
     _('--defense', default='none', type=str, choices=POOLING_MAPS.keys(), help='type of defense')
     _('--query', default=25000, type=int, help='query limit')
     _('--tag', default='test', type=str)
+    _('--no-smart-noise', action='store_true')
+    _('--no-smart-median', action='store_true')
     args = p.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = f'{args.g}'
 
@@ -76,7 +82,7 @@ if __name__ == '__main__':
     dataset = get_imagenet('val' if INSTANCE_TEST else f'val_3', transform)
     id_list = pickle.load(open(f'static/meta/valid_ids.model_{args.model}.scale_3.pkl', 'rb'))[::4]
 
-    root = 'static/bb_med19'
+    root = f'static/bb_{args.tag}'
     os.makedirs(root, exist_ok=True)
 
     # Load network
@@ -84,7 +90,7 @@ if __name__ == '__main__':
 
     # attack each one
     if INSTANCE_TEST:
-        pref = f'bb_test.{args.id}.{args.defense}'
+        pref = f'bb_{args.tag}.{args.id}.{args.defense}'
         attack_one(args.id, setid=True)
         exit()
 

@@ -51,14 +51,14 @@ def get_all_data():
 
     # run benign
     filename_list = [dataset.imgs[i][0] for i in id_list]
-    all_data['src'] = get_many(filename_list, load='api-src.pkl')
+    all_data['src'] = get_many(filename_list, load='./static/oakland_results/api-src.pkl')
 
     # run cw & scale
     for k in kappa_list:
         filename_list = [f'static/images/3.cv.linear/{i}.adv.eps_{k}.small.png' for i in id_list]
-        all_data[f'cw-{k}'] = get_many(filename_list, load=f'api-cw-{k}.pkl')
+        all_data[f'cw-{k}'] = get_many(filename_list, load=f'./static/oakland_results/api-cw-{k}.pkl')
         filename_list = [f'static/images/3.cv.linear/{i}.generate.eps_{k}.pool_none.big.png' for i in id_list]
-        all_data[f'scale-{k}'] = get_many(filename_list, load=f'api-scale-{k}.pkl')
+        all_data[f'scale-{k}'] = get_many(filename_list, load=f'./static/oakland_results/api-scale-{k}.pkl')
 
     return all_data
 
@@ -88,9 +88,9 @@ def get_all_score():
 
 
 if __name__ == '__main__':
-    ID, KEY = map(os.environ.get, ['TENCENT_ID', 'TENCENT_KEY'])
-    cred = credential.Credential(ID, KEY)
-    client = tiia_client.TiiaClient(cred, region='ap-shanghai')
+    # ID, KEY = map(os.environ.get, ['TENCENT_ID', 'TENCENT_KEY'])
+    # cred = credential.Credential(ID, KEY)
+    # client = tiia_client.TiiaClient(cred, region='ap-shanghai')
 
     MAX_WORKERS = 16
 
@@ -127,8 +127,6 @@ if __name__ == '__main__':
     pm = [[stat['att']['L2'] for stat in get_med_data(k, 'median')] for k in kappa_list]
     pm = np.array(pm, dtype=np.float32) / 3
 
-    from IPython import embed; embed(using=False); exit()
-
     # skip ss < 50
     ok = np.argwhere(st >= 50)[:, 0]
     sc, ss, pc, ps = map(lambda x: x[:, ok], [sc, ss, pc, ps])
@@ -138,8 +136,8 @@ if __name__ == '__main__':
     """
     set_ccs_font(10)
     plt.figure(figsize=(3, 3), constrained_layout=True)
-    plt.plot(kappa_list, np.median(ss, axis=1), marker='o', ms=4, lw=1.5, c=GREEN, label='Scale-Adv')
-    plt.plot(kappa_list, np.median(sc, axis=1), marker='^', ms=4, lw=1.5, c=ORANGE, label='C&W Attack')
+    plt.plot(kappa_list, np.median(ss, axis=1), marker='o', ms=4, lw=1.5, c=GREEN, label='C&W Attack (scaling)')
+    plt.plot(kappa_list, np.median(sc, axis=1), marker='^', ms=4, lw=1.5, c=ORANGE, label='C&W Attack (vanilla)')
     plt.xlim(-0.5, 10.5)
     plt.xticks(kappa_list, fontsize=12)
     plt.xlabel(r'Confidence ($\kappa$)')
@@ -163,8 +161,8 @@ if __name__ == '__main__':
         plt.text(budget[pos], sar[kappa][pos], rf'$\kappa={kappa}$', c=c, rotation=rot, **text_kwargs)
 
     # k=2
-    _pp(sar_s, 3, 'k', '-', 'Scale-Adv', 15)
-    _pp(sar_c, 3, 'k', ':', 'C&W Attack', 15)
+    _pp(sar_s, 3, 'k', '-', 'C&W Attack (scaling)', 15)
+    _pp(sar_c, 3, 'k', ':', 'C&W Attack (vanilla)', 15)
     # k=5
     _pp(sar_s, 5, 'b', '-', None, 20)
     _pp(sar_c, 5, 'b', ':', None, 20)
@@ -176,8 +174,8 @@ if __name__ == '__main__':
     plt.xticks(list(range(0, 21, 5)), fontsize=12)
     # plt.ylim(-2, 102)
     # plt.yticks(list(range(0, 101, 20)), fontsize=12)
-    plt.xlabel(r'Perturbation Budget ($\ell_2$)')
-    plt.ylabel('Success Rate (%)')
+    plt.xlabel(r'Perturbation Budget (scaled $\ell_2$)')
+    plt.ylabel('Success Attack Rate (%)')
     plt.legend(borderaxespad=0.5, loc='upper left', fontsize=10)
     plt.grid(True)
     plt.savefig(f'api-sar-vs-pert.pdf')
