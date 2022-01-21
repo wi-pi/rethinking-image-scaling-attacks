@@ -3,7 +3,6 @@ import torch
 from art.estimators.classification import PyTorchClassifier
 from numpy import linalg as LA
 
-# from qpsolvers import solve_qp
 from tqdm import trange
 
 MAX_ITER = 1000
@@ -28,7 +27,7 @@ class SignOPT(object):
         self.preprocess = preprocess
         self.smart_noise = smart_noise
 
-    def generate(self, x0: np.ndarray, y0: int, alpha=0.2, beta=0.001, iterations=1000, query_limit=20000):
+    def generate(self, x0: np.ndarray, y0: int, alpha=0.2, beta=0.001, iterations=1000, query_limit=20000, tag=None):
         """ Attack the original image and return adversarial example
             model: (pytorch model)
             train_dataset: set of training data
@@ -48,7 +47,7 @@ class SignOPT(object):
         """
         num_directions = 100
         best_theta, g_theta = None, float('inf')
-        for _ in trange(num_directions, desc='init'):
+        for _ in range(num_directions):
             # randomly sample theta from gaussian distribution
             theta = torch.randn_like(x0)
 
@@ -77,7 +76,7 @@ class SignOPT(object):
             return x0, 0, False, query_count, best_theta
 
         print(f"========> Found best distortion {g_theta:.4f} using {query_count} queries")
-        self.log.append((0, query_count, g_theta))
+        # self.log.append((0, query_count, g_theta))
 
         """
         Gradient Descent
@@ -85,70 +84,74 @@ class SignOPT(object):
         xg, gg = best_theta, g_theta
         vg = np.zeros_like(xg)
         distortions = [gg]
-        for i in trange(iterations, desc='GD'):
-            # estimate the gradint at x0 + theta
-            sign_gradient, grad_queries = self.sign_grad_v1(x0, y0, xg, initial_lbd=gg, h=beta)
+        with trange(iterations, desc='SignOPT') as pbar:
+            for i in pbar:
+                print()
+                # estimate the gradint at x0 + theta
+                sign_gradient, grad_queries = self.sign_grad_v1(x0, y0, xg, initial_lbd=gg, h=beta)
 
-            # line search of the step size of gradient descent
-            ls_count = 0
-            min_theta = xg  # next theta
-            min_g2 = gg  # current g_theta
-            min_vg = vg  # velocity (for momentum only)
-            for _ in range(15):
-                # update theta by one-step sgd
-                new_theta = xg - alpha * sign_gradient
-                new_theta /= LA.norm(new_theta)
-
-                new_g2, count = self.fine_grained_binary_search_local(x0, y0, new_theta, initial_lbd=min_g2,
-                                                                      tol=beta / 500)
-                ls_count += count
-                alpha = alpha * 2  # gradually increasing step size
-                if new_g2 < min_g2:
-                    min_theta = new_theta
-                    min_g2 = new_g2
-                else:
-                    break
-
-            # if the above code failed for the init alpha, we then try to decrease alpha
-            if min_g2 >= gg:
+                # line search of the step size of gradient descent
+                ls_count = 0
+                min_theta = xg  # next theta
+                min_g2 = gg  # current g_theta
+                min_vg = vg  # velocity (for momentum only)
                 for _ in range(15):
-                    alpha = alpha * 0.25
+                    # update theta by one-step sgd
                     new_theta = xg - alpha * sign_gradient
                     new_theta /= LA.norm(new_theta)
+
                     new_g2, count = self.fine_grained_binary_search_local(x0, y0, new_theta, initial_lbd=min_g2,
                                                                           tol=beta / 500)
                     ls_count += count
-                    if new_g2 < gg:
+                    alpha = alpha * 2  # gradually increasing step size
+                    if new_g2 < min_g2:
                         min_theta = new_theta
                         min_g2 = new_g2
+                    else:
                         break
 
-            # if the above two blocks of code failed
-            if alpha < 1e-4:
-                alpha = 1.0
-                print("Warning: not moving")
-                beta = beta * 0.1
-                if beta < 1e-8:
+                # if the above code failed for the init alpha, we then try to decrease alpha
+                if min_g2 >= gg:
+                    for _ in range(15):
+                        alpha = alpha * 0.25
+                        new_theta = xg - alpha * sign_gradient
+                        new_theta /= LA.norm(new_theta)
+                        new_g2, count = self.fine_grained_binary_search_local(x0, y0, new_theta, initial_lbd=min_g2,
+                                                                              tol=beta / 500)
+                        ls_count += count
+                        if new_g2 < gg:
+                            min_theta = new_theta
+                            min_g2 = new_g2
+                            break
+
+                # if the above two blocks of code failed
+                if alpha < 1e-4:
+                    alpha = 1.0
+                    print("Warning: not moving")
+                    beta = beta * 0.1
+                    if beta < 1e-8:
+                        break
+
+                # if all attempts failed, min_theta, min_g2 will be the current theta (i.e. not moving)
+                xg, gg = min_theta, min_g2
+                vg = min_vg
+
+                # save image
+                if tag is not None:
+                    import torchvision.transforms.functional as F
+                    adv = x0 + gg * xg
+                    F.to_pil_image(adv[0]).save(f'{tag}.{i:02d}.png')
+
+                # logging
+                query_count += grad_queries + ls_count
+                ls_total += ls_count
+                distortions.append(gg)
+                pbar.set_postfix({'query': query_count, 'l2': f'{gg:.3f}'})
+                self.log.append((i, query_count, gg))
+
+                # stop if we reach the query limit
+                if query_count > query_limit:
                     break
-
-            # if all attempts failed, min_theta, min_g2 will be the current theta (i.e. not moving)
-            xg, gg = min_theta, min_g2
-            vg = min_vg
-
-            # update logs
-            query_count += grad_queries + ls_count
-            ls_total += ls_count
-            distortions.append(gg)
-
-            # stop if we reach the query limit
-            if query_count > query_limit:
-                break
-
-            # logging
-            self.log.append((i + 1, query_count, gg))
-            # self.log[i + 1][0], self.log[i + 1][1] = gg, query_count
-            if (i + 1) % 5 == 0:
-                print(f"Iteration {i+1:3d} distortion {gg:.4f} num_queries {query_count}")
 
         target = self.model.predict_label(x0 + gg * xg)
         print(f"Succeed distortion {gg:.4f} target {target:d} queries {query_count:d} LS queries {ls_total:d}")

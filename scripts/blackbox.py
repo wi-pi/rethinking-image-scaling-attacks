@@ -9,6 +9,7 @@ from art.estimators.classification import PyTorchClassifier
 from loguru import logger
 
 from scaleadv.attacks.hsj import MyHopSkipJump
+from scaleadv.attacks.sign_opt_new import SignOPT
 from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
 from scaleadv.defenses import POOLING_MAPS
@@ -45,9 +46,17 @@ def attack_one(id, setid=False):
         else:
             preprocess = [nn.Sequential(POOLING_MAPS['quantile'].like(pooling_layer), scaling_layer),
                           nn.Sequential(pooling_layer, scaling_layer)]
-    attack = MyHopSkipJump(classifier, max_iter=100, max_eval=600, max_query=args.query, preprocess=preprocess,
-                           tag=pref, smart_noise=not args.no_smart_noise)
-    attack.generate(src)
+
+    if args.attack == 'hsj':
+        attack = MyHopSkipJump(classifier, max_iter=100, max_eval=600, max_query=args.query, preprocess=preprocess,
+                               tag=pref, smart_noise=not args.no_smart_noise)
+        attack.generate(src)
+    elif args.attack == 'opt':
+        attack = SignOPT(classifier, k=200, preprocess=preprocess, smart_noise=not args.no_smart_noise)
+        attack.generate(src, y_src, alpha=0.2, beta=0.001, iterations=1000, query_limit=args.query, tag=pref)
+    else:
+        raise NotImplementedError(args.attack)
+
     pickle.dump(attack.log, open(f'{pref}.log', 'wb'))
 
 
@@ -71,6 +80,8 @@ if __name__ == '__main__':
     _('--tag', default='test', type=str)
     _('--no-smart-noise', action='store_true')
     _('--no-smart-median', action='store_true')
+    # Black-box attack args
+    _('--attack', default='hsj', choices=['hsj', 'opt'], help='blackbox attack')
     args = p.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = f'{args.g}'
 
