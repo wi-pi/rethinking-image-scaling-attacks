@@ -1,31 +1,28 @@
+import time
+
 import numpy as np
 import torch
+import torchvision.transforms.functional as F
 from art.estimators.classification import PyTorchClassifier
 from numpy import linalg as LA
-
 from tqdm import trange
 
 MAX_ITER = 1000
 
 
-class SignOPT_ModelAdaptor(object):
-
-    def __init__(self, model: PyTorchClassifier):
-        self.model = model
-
-    def predict_label(self, x: torch.Tensor):
-        x = x.clamp(0, 1)
-        p = self.model.predict(x.cpu().numpy()).argmax(1)
-        return p.item()
-
-
 class SignOPT(object):
-    def __init__(self, model, k=200, preprocess=None, smart_noise=False):
-        self.model = SignOPT_ModelAdaptor(model)
+
+    def __init__(self, model: PyTorchClassifier, k: int = 200, preprocess=None, smart_noise=False):
+        self.model = model
         self.k = k
         self.log = []
         self.preprocess = preprocess
         self.smart_noise = smart_noise
+
+    def is_adversary(self, x: np.ndarray, y: int):
+        x = np.clip(x, 0, 1)
+        pred = self.model.predict(x).argmax(1).item()
+        return pred != y
 
     def generate(self, x0: np.ndarray, y0: int, alpha=0.2, beta=0.001, iterations=1000, query_limit=20000, tag=None):
         """ Attack the original image and return adversarial example
@@ -33,61 +30,54 @@ class SignOPT(object):
             train_dataset: set of training data
             (x0, y0): original image
         """
+        # type check
+        assert x0.shape[0] == 1
+        assert x0.dtype == np.float32
 
-        query_count = 0
-        ls_total = 0
-        x0 = torch.as_tensor(x0)
-
-        if self.model.predict_label(x0) != y0:
+        if self.is_adversary(x0, y0):
             print("Fail to classify the image. No need to attack.")
             return x0, 0, True, 0, None
+
+        nb_queries = 0
 
         """
         Init: find a good starting point (direction)
         """
-        num_directions = 100
         best_theta, g_theta = None, float('inf')
-        for _ in range(num_directions):
+        for _ in range(100):
             # randomly sample theta from gaussian distribution
-            theta = torch.randn_like(x0)
+            theta = np.random.randn(*x0.shape).astype(np.float32)
 
             # check if theta is an adv example
-            pred = self.model.predict_label(x0 + theta)
-            query_count += 1
-
-            # register adv directions
-            if pred != y0:
+            nb_queries += 1
+            if self.is_adversary(x0 + theta, y0):
                 # l2 normalize
                 initial_lbd = LA.norm(theta)
-                theta /= initial_lbd
+                theta = theta / initial_lbd
 
                 # binary search a point near the boundary
-                lbd, count = self.fine_grained_binary_search(self.model, x0, y0, theta, initial_lbd, g_theta)
-                query_count += count
+                lbd, count = self.fine_grained_binary_search(x0, y0, theta, initial_lbd, g_theta)
+                nb_queries += count
 
                 # record the best theta
                 if lbd < g_theta:
                     best_theta, g_theta = theta, lbd
-                    # print("--------> Found distortion %.4f" % g_theta)
 
         # cannot find an adv example
         if g_theta == float('inf'):
             print("Couldn't find valid initial, failed")
-            return x0, 0, False, query_count, best_theta
+            return x0, 0, False, nb_queries, best_theta
 
-        print(f"========> Found best distortion {g_theta:.4f} using {query_count} queries")
-        # self.log.append((0, query_count, g_theta))
+        print(f"========> Found best distortion {g_theta:.4f} using {nb_queries} queries")
 
         """
         Gradient Descent
         """
         xg, gg = best_theta, g_theta
         vg = np.zeros_like(xg)
-        distortions = [gg]
         with trange(iterations, desc='SignOPT') as pbar:
             for i in pbar:
-                print()
-                # estimate the gradint at x0 + theta
+                # estimate the gradient at x0 + theta
                 sign_gradient, grad_queries = self.sign_grad_v1(x0, y0, xg, initial_lbd=gg, h=beta)
 
                 # line search of the step size of gradient descent
@@ -98,7 +88,7 @@ class SignOPT(object):
                 for _ in range(15):
                     # update theta by one-step sgd
                     new_theta = xg - alpha * sign_gradient
-                    new_theta /= LA.norm(new_theta)
+                    new_theta = new_theta / LA.norm(new_theta)
 
                     new_g2, count = self.fine_grained_binary_search_local(x0, y0, new_theta, initial_lbd=min_g2,
                                                                           tol=beta / 500)
@@ -115,7 +105,7 @@ class SignOPT(object):
                     for _ in range(15):
                         alpha = alpha * 0.25
                         new_theta = xg - alpha * sign_gradient
-                        new_theta /= LA.norm(new_theta)
+                        new_theta = new_theta / LA.norm(new_theta)
                         new_g2, count = self.fine_grained_binary_search_local(x0, y0, new_theta, initial_lbd=min_g2,
                                                                               tol=beta / 500)
                         ls_count += count
@@ -138,110 +128,106 @@ class SignOPT(object):
 
                 # save image
                 if tag is not None:
-                    import torchvision.transforms.functional as F
-                    adv = x0 + gg * xg
-                    F.to_pil_image(adv[0].clip(0, 1)).save(f'{tag}.{i:02d}.png')
+                    adv = np.clip(x0 + gg * xg, 0, 1)[0]
+                    F.to_pil_image(torch.as_tensor(adv)).save(f'{tag}.{i:02d}.png')
 
                 # logging
-                query_count += grad_queries + ls_count
-                ls_total += ls_count
-                distortions.append(gg)
-                pbar.set_postfix({'query': query_count, 'l2': f'{gg:.3f}'})
-                self.log.append((i, query_count, gg))
+                nb_queries += grad_queries + ls_count
+                pbar.set_postfix({'query': nb_queries, 'l2': f'{gg:.3f}'})
+                self.log.append((i, nb_queries, gg))
 
                 # stop if we reach the query limit
-                if query_count > query_limit:
+                if nb_queries > query_limit:
                     break
 
-        target = self.model.predict_label(x0 + gg * xg)
-        print(f"Succeed distortion {gg:.4f} target {target:d} queries {query_count:d} LS queries {ls_total:d}")
-        return x0 + gg * xg, gg, True, query_count, xg
+        return x0 + gg * xg, gg, True, nb_queries, xg
 
-    def sign_grad_v1(self, x0, y0, theta, initial_lbd, h=0.001):
+    def sign_grad_v1(self, x0: np.ndarray, y0: int, theta: np.ndarray, initial_lbd: str, h: str = 0.001):
         """
         Evaluate the sign of gradient by formulat
         sign(g) = 1/Q [ \sum_{q=1}^Q sign( g(theta+h*u_i) - g(theta) )u_i$ ]
         """
-        sign_grad = torch.zeros_like(theta)
-        queries = 0
+        sign_grad = np.zeros_like(theta)
+        x_adv = x0 + initial_lbd * theta
+
         for i in range(self.k):
-            if self.smart_noise and self.preprocess:
-                u = self.get_noise(x0)
-            else:
-                u = torch.randn_like(theta)
+            # get unit noise
+            u = self.get_noise(x_adv) if self.smart_noise and self.preprocess else np.random.randn(*theta.shape)
+            u = u / LA.norm(u)
 
-            u /= u.norm(2)
+            # get unit new theta
             new_theta = theta + h * u
-            new_theta /= new_theta.norm(2)
+            new_theta = new_theta / LA.norm(new_theta)
 
-            queries += 1
-            pred = self.model.predict_label(x0 + initial_lbd * new_theta)
-            sign = 1 if pred == y0 else -1
+            sign = -1 if self.is_adversary(x0 + initial_lbd * new_theta, y0) else 1
             sign_grad += u * sign
 
         sign_grad /= self.k
 
-        return sign_grad, queries
+        return sign_grad, self.k
 
-    def fine_grained_binary_search_local(self, x0, y0, theta, initial_lbd=1.0, tol=1e-5):
-        nquery = 0
+    def fine_grained_binary_search_local(
+        self, x0: np.ndarray, y0: int, theta: np.ndarray,
+        initial_lbd: float = 1.0, tol: str = 1e-5
+    ):
+        nb_queries = 0
         lbd = initial_lbd
 
         # still inside boundary
-        if self.model.predict_label(x0 + lbd * theta) == y0:
-            lbd_lo = lbd
-            lbd_hi = lbd * 1.01
-            nquery += 1
-            while self.model.predict_label(x0 + lbd_hi * theta) == y0:
+        nb_queries += 1
+        if not self.is_adversary(x0 + lbd * theta, y0):
+            lbd_lo, lbd_hi = lbd, lbd * 1.01
+            while not self.is_adversary(x0 + lbd_hi * theta, y0):
                 lbd_hi = lbd_hi * 1.01
-                nquery += 1
+                nb_queries += 1
                 if lbd_hi > 20:
-                    return float('inf'), nquery
+                    return float('inf'), nb_queries
         else:
-            lbd_hi = lbd
-            lbd_lo = lbd * 0.99
-            nquery += 1
-            while self.model.predict_label(x0 + lbd_lo * theta) != y0:
+            lbd_lo, lbd_hi = lbd * 0.99, lbd
+            while self.is_adversary(x0 + lbd_lo * theta, y0):
                 lbd_lo = lbd_lo * 0.99
-                nquery += 1
+                nb_queries += 1
 
-        while (lbd_hi - lbd_lo) > tol:
+        while lbd_hi - lbd_lo > tol:
             lbd_mid = (lbd_lo + lbd_hi) / 2.0
-            nquery += 1
-            if self.model.predict_label(x0 + lbd_mid * theta) != y0:
+            nb_queries += 1
+            if self.is_adversary(x0 + lbd_mid * theta, y0):
                 lbd_hi = lbd_mid
             else:
                 lbd_lo = lbd_mid
-        return lbd_hi, nquery
 
-    def fine_grained_binary_search(self, model, x0, y0, theta, initial_lbd, current_best):
-        nquery = 0
+        return lbd_hi, nb_queries
+
+    def fine_grained_binary_search(
+        self, x0: np.ndarray, y0: int, theta: np.ndarray,
+        initial_lbd: float, current_best: float
+    ):
+        nb_queries = 0
         if initial_lbd > current_best:
-            if model.predict_label(x0 + current_best * theta) == y0:
-                nquery += 1
-                return float('inf'), nquery
+            nb_queries += 1
+            if not self.is_adversary(x0 + current_best * theta, y0):
+                return float('inf'), nb_queries
             lbd = current_best
         else:
             lbd = initial_lbd
 
-        lbd_hi = lbd
-        lbd_lo = 0.0
-
-        while (lbd_hi - lbd_lo) > 1e-3:  # was 1e-5
+        lbd_lo, lbd_hi = 0.0, lbd
+        while lbd_hi - lbd_lo > 1e-3:  # was 1e-5
             lbd_mid = (lbd_lo + lbd_hi) / 2.0
-            nquery += 1
-            if model.predict_label(x0 + lbd_mid * theta) != y0:
+            nb_queries += 1
+            if self.is_adversary(x0 + lbd_mid * theta, y0):
                 lbd_hi = lbd_mid
             else:
                 lbd_lo = lbd_mid
-        return lbd_hi, nquery
 
-    def get_noise(self, x0: torch.Tensor):
-        x_hr = x0.clone().cuda()
+        return lbd_hi, nb_queries
+
+    def get_noise(self, x0: np.ndarray):
+        x_hr = torch.as_tensor(x0, dtype=torch.float32).cuda()
         delta_lr = torch.randn(1, 3, 224, 224).cuda()
         delta_hr = torch.zeros_like(x_hr).requires_grad_()
         perturbed_hr = x_hr + delta_hr
         perturbed_lr = self.preprocess[1](x_hr) + delta_lr
         loss = torch.norm(self.preprocess[0](perturbed_hr) - perturbed_lr)
         loss.backward()
-        return delta_hr.grad.cpu()
+        return delta_hr.grad.cpu().numpy().astype(np.float32)
