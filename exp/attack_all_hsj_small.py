@@ -35,7 +35,7 @@ def attack_one(id, setid=False):
         input_shape=x_small.shape[1:],
         nb_classes=1000,
         clip_values=(0, 1),
-        preprocessing_defences=SaveAndLoadPyTorch()
+        # preprocessing_defences=SaveAndLoadPyTorch()
     )
 
     if args.attack == 'hsj':

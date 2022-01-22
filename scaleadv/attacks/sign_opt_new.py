@@ -21,6 +21,7 @@ class SignOPT(object):
 
     def is_adversary(self, x: np.ndarray, y: int):
         x = np.clip(x, 0, 1)
+        assert x.dtype == np.float32
         pred = self.model.predict(x).argmax(1).item()
         return pred != y
 
@@ -142,7 +143,7 @@ class SignOPT(object):
 
         return x0 + gg * xg, gg, True, nb_queries, xg
 
-    def sign_grad_v1(self, x0: np.ndarray, y0: int, theta: np.ndarray, initial_lbd: str, h: str = 0.001):
+    def sign_grad_v1(self, x0: np.ndarray, y0: int, theta: np.ndarray, initial_lbd: float, h: str = 0.001):
         """
         Evaluate the sign of gradient by formulat
         sign(g) = 1/Q [ \sum_{q=1}^Q sign( g(theta+h*u_i) - g(theta) )u_i$ ]
@@ -152,7 +153,8 @@ class SignOPT(object):
 
         for i in range(self.k):
             # get unit noise
-            u = self.get_noise(x_adv) if self.smart_noise and self.preprocess else np.random.randn(*theta.shape)
+            is_smart = self.smart_noise and self.preprocess
+            u = self.get_noise(x_adv) if is_smart else np.random.randn(*theta.shape).astype(np.float32)
             u = u / LA.norm(u)
 
             # get unit new theta

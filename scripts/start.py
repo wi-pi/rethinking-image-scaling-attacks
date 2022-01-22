@@ -62,15 +62,15 @@ from itertools import cycle
 #     os.system(cmd)
 
 
-"""Run SignOPT on small images. [RUNNING op]
+"""Run SignOPT on small images. [RUNNING guard]
 """
-# n_job = 4
-# gpus = [0, 1, 2, 3]
-# for i, gpu in zip(range(n_job), cycle(gpus)):
-#     cmd = f'nohup python -m exp.attack_all_hsj_small' \
-#           f' --scale 3 -l {i} -r 100 -s {n_job} -g {gpu} --tag opt_small --attack opt' \
-#           f' 2>&1 > static/log/bb_small_{i}.log &'
-#     os.system(cmd)
+n_job = 4
+gpus = [0, 1, 2, 3]
+for i, gpu in zip(range(n_job), cycle(gpus)):
+    cmd = f'nohup python -m exp.attack_all_hsj_small' \
+          f' --scale 3 -l {i} -r 100 -s {n_job} -g {gpu} --tag opt_small --attack opt' \
+          f' 2>&1 > static/log/bb_small_opt_{i}.log &'
+    os.system(cmd)
 
 
 """Run SignOPT (no defense) with smart noise [RUNNING guard]
@@ -86,10 +86,10 @@ from itertools import cycle
 
 """Run SignOPT (median defense) with smart noise [RUNNING guard]
 """
-n_job = 4
-gpus = [0, 1, 2, 3]
-for i, gpu in zip(range(n_job), cycle(gpus)):
-    cmd = f'nohup python -m scripts.blackbox' \
-          f' --scale 3 --defense median -l {i} -r 100 -s {n_job} -g {gpu} --tag opt_good --attack opt' \
-          f' 2>&1 > static/log/bb_median_opt_good_{i}.log &'
-    os.system(cmd)
+# n_job = 4
+# gpus = [0, 1, 2, 3]
+# for i, gpu in zip(range(n_job), cycle(gpus)):
+#     cmd = f'nohup python -m scripts.blackbox' \
+#           f' --scale 3 --defense median -l {i} -r 100 -s {n_job} -g {gpu} --tag opt_good --attack opt' \
+#           f' 2>&1 > static/log/bb_median_opt_good_{i}.log &'
+#     os.system(cmd)
