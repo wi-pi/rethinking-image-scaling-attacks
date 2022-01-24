@@ -14,25 +14,34 @@ def load_data(fmt):
             d = pickle.load(open(fmt.format(i), 'rb'))
         except:
             continue
+
+        if not d:
+            continue
+
         _, query, pert = map(np.array, zip(*d))
         pos = np.argmax(query >= query_budgets[..., None] * 1000, axis=1)  # first occurrence
         data.append(pert[pos])
     return np.stack(data, axis=1)  # dim = [query, data of this query]
 
 
-def plot_pert_vs_queries():
+def plot_pert_vs_queries(defense: str):
     set_ccs_font(10)
     plt.figure(figsize=(3, 3), constrained_layout=True)
-    plt.plot(query_budgets, np.median(data_none, 1), marker='o', ms=4, lw=1.5, c=GREEN, label='HSJ Attack (scaling)')
-    plt.plot(query_budgets, np.median(data_median, 1), marker='^', ms=4, lw=1.5, c=ORANGE, label='HSJ Attack (median)')
-    plt.plot(query_budgets, np.median(data_hsj, 1), marker='D', ms=4, lw=1.5, c='k', label='HSJ Attack (vanilla)')
+    if defense == 'none':
+        plt.plot(query_budgets, np.median(data_none, 1), ms=4, lw=1.5, c=GREEN, label=f'{attack_full} (HR)')
+        plt.plot(query_budgets, np.median(data_badnoise, 1), ms=4, lw=1.5, c=ORANGE, label=f'{attack_full} (HR w/o SNS)')
+    if defense == 'median':
+        plt.plot(query_budgets, np.median(data_median, 1), ms=4, lw=1.5, c=GREEN, label=f'{attack_full} (HR)')
+        plt.plot(query_budgets, np.median(data_badmedian, 1), ms=4, lw=1.5, c=ORANGE, label=f'{attack_full} (HR w/o efficiency)')
+
+    plt.plot(query_budgets, np.median(data_hsj, 1), ms=4, ls='--', lw=1.5, c='k', label=f'{attack_full} (LR)')
     plt.legend(borderaxespad=0.5)
     plt.yscale('log')
     plt.xticks(list(range(0, 26, 5)), [f'{i}K' for i in range(0, 26, 5)])
     plt.xlabel('Number of Queries (#)')
     plt.ylabel(r'Perturbation (scaled $\ell_2$)')
     plt.grid(True)
-    plt.savefig(f'bb-l2-vs-queries.pdf')
+    plt.savefig(f'bb-{attack_short}-{defense}-l2-vs-queries.pdf')
 
 
 def plot_pert_vs_queries_median():
@@ -52,8 +61,6 @@ def plot_pert_vs_queries_median():
 
 
 def plot_pert_vs_queries_sns():
-    data_badnoise = load_data('static/bb_badnoise/{}.ratio_3.def_none.log') / 3
-
     set_ccs_font(10)
     plt.figure(figsize=(3, 3), constrained_layout=True)
     plt.plot(query_budgets, np.median(data_none, 1), marker='o', ms=4, lw=1.5, c=GREEN, label='HSJ Attack (scaling w/ SNS)')
@@ -65,12 +72,10 @@ def plot_pert_vs_queries_sns():
     plt.xlabel('Number of Queries (#)')
     plt.ylabel(r'Perturbation (scaled $\ell_2$)')
     plt.grid(True)
-    plt.savefig(f'bb-l2-vs-queries-sns.pdf')
+    plt.savefig(f'bb-opt-l2-vs-queries-sns.pdf')
 
 
 def plot_pert_vs_queries_smooth():
-    data_badmedian = load_data('static/bb_badmedian/{}.ratio_3.def_median.log') / 3
-
     set_ccs_font(10)
     plt.figure(figsize=(3, 3), constrained_layout=True)
     plt.plot(query_budgets, np.median(data_median, 1), marker='o', ms=4, lw=1.5, c=GREEN, label='HSJ Attack (median w/ smooth)')
@@ -82,10 +87,10 @@ def plot_pert_vs_queries_smooth():
     plt.xlabel('Number of Queries (#)')
     plt.ylabel(r'Perturbation (scaled $\ell_2$)')
     plt.grid(True)
-    plt.savefig(f'bb-l2-vs-queries-smooth.pdf')
+    plt.savefig(f'bb-opt-l2-vs-queries-smooth.pdf')
 
 
-def plot_sar_vs_pert():
+def plot_sar_vs_pert(defense):
     set_ccs_font(10)
     plt.figure(figsize=(3, 3), constrained_layout=True)
     text_kwargs = dict(fontsize=8, rotation_mode='anchor', bbox=dict(fc='white', ec='none', pad=0),
@@ -99,20 +104,32 @@ def plot_sar_vs_pert():
 
     # plot query 5K
     q, c, p = 10, 'k', 10
-    _pp(data_none, q, c, '-', 'HSJ Attack (scaling)', p)
-    _pp(data_median, q, c, '--', 'HSJ Attack (median)', p)
-    _pp(data_hsj, q, c, ':', 'HSJ Attack (vanilla)', p)
+    if defense == 'none':
+        _pp(data_none, q, c, '-', f'{attack_full} (HR)', p)
+        _pp(data_badnoise, q, c, '--', f'{attack_full} (HR w/o SNS)', p)
+    if defense == 'median':
+        _pp(data_median, q, c, '-', f'{attack_full} (HR)', p)
+        _pp(data_badmedian, q, c, '--', f'{attack_full} (HR w/o efficiency)', p)
+    _pp(data_hsj, q, c, ':', f'{attack_full} (LR)', p)
 
     # plot query 10K
     q, c, p = 15, 'b', 12
-    _pp(data_none, q, c, '-', None, p)
-    _pp(data_median, q, c, '--', None, p)
+    if defense == 'none':
+        _pp(data_none, q, c, '-', None, p)
+        _pp(data_badnoise, q, c, '--', None, p)
+    if defense == 'median':
+        _pp(data_median, q, c, '-', None, p)
+        _pp(data_badmedian, q, c, '--', None, p)
     _pp(data_hsj, q, c, ':', None, p)
 
     # plot query 25K
     q, c, p = 20, 'r', 18
-    _pp(data_none, q, c, '-', None, p)
-    _pp(data_median, q, c, '--', None, p)
+    if defense == 'none':
+        _pp(data_none, q, c, '-', None, p)
+        _pp(data_badnoise, q, c, '--', None, p)
+    if defense == 'median':
+        _pp(data_median, q, c, '-', None, p)
+        _pp(data_badmedian, q, c, '--', None, p)
     _pp(data_hsj, q, c, ':', None, p)
 
     plt.xlim(-0.05, 2.05)
@@ -121,9 +138,12 @@ def plot_sar_vs_pert():
     plt.yticks(list(range(0, 101, 20)), fontsize=12)
     plt.xlabel(r'Perturbation Budget (scaled $\ell_2$)')
     plt.ylabel('Success Attack Rate (%)')
-    plt.legend(borderaxespad=0.5, loc='lower right', fontsize=10)
+    if defense == 'none':
+        plt.legend(borderaxespad=0.5, loc='lower right', fontsize=10)
+    if defense == 'median':
+        plt.legend(borderaxespad=0.5, loc='upper left', fontsize=10)
     plt.grid(True)
-    plt.savefig(f'bb-sar-vs-pert.pdf')
+    plt.savefig(f'bb-{attack_short}-{defense}-sar-vs-pert.pdf')
 
 
 if __name__ == '__main__':
@@ -136,15 +156,30 @@ if __name__ == '__main__':
     query_budgets = np.arange(1, 26)
     pert_budgets = np.arange(0, 2.1, 0.1)
 
-    # load data
+    # load data (hsj)
+    attack_full = 'HSJ'
+    attack_short = 'hsj'
     data_hsj = load_data('static/bb/{}.ratio_1.def_none.log')
     data_none = load_data('static/bb/{}.ratio_3.def_none.log') / 3
     data_median = load_data('static/bb_med28/{}.ratio_3.def_median.log') / 3
+    data_badnoise = load_data('static/bb_badnoise/{}.ratio_3.def_none.log') / 3
+    data_badmedian = load_data('static/bb_badmedian/{}.ratio_3.def_median.log') / 3
+
+    # load data (opt)
+    # attack_full = 'Sign-OPT'
+    # attack_short = 'opt'
+    # data_hsj = load_data('static/bb_opt_small/{}.ratio_3.def_none.log')
+    # data_none = load_data('static/bb_opt_good/{}.ratio_3.def_none.log') / 3
+    # data_median = load_data('static/bb_opt_good/{}.ratio_3.def_median.log') / 3
+    # data_badnoise = load_data('static/bb_opt_bad/{}.ratio_3.def_none.log') / 3
+    # data_badmedian = load_data('static/bb_opt_bad/{}.ratio_3.def_median.log') / 3
+
     print('data loaded:', data_hsj.shape, data_none.shape, data_median.shape)
 
     # plot data
-    # plot_pert_vs_queries()
-    # plot_sar_vs_pert()
+    for d in ['none', 'median']:
+        plot_pert_vs_queries(d)
+        plot_sar_vs_pert(d)
     # plot_pert_vs_queries_median()
     # plot_pert_vs_queries_sns()
-    plot_pert_vs_queries_smooth()
+    # plot_pert_vs_queries_smooth()
