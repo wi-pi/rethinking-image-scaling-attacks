@@ -647,6 +647,36 @@ class MyHopSkipJump(EvasionAttack):
             rnd_noise[i] = delta_hr.grad.cpu().numpy().astype(ART_NUMPY_DTYPE)
         return rnd_noise
 
+    def _get_noise_precise(
+        self,
+        current_sample: np.ndarray,
+        num_eval: int,
+        it: int
+    ) -> np.ndarray:
+        rnd_noise = np.zeros([num_eval] + list(self.estimator.input_shape)).astype(ART_NUMPY_DTYPE)
+        x_hr = torch.as_tensor(current_sample[None, ...]).cuda()
+        for i in range(num_eval):
+            delta_lr = torch.randn(1, 3, 224, 224).cuda()
+            delta_hr = torch.zeros_like(x_hr).requires_grad_()
+            perturbed_lr = self.preprocess[1](x_hr) + delta_lr
+
+            # internal minimization
+            save_loss = None
+            opt = torch.optim.Adam([delta_hr], lr=0.01)
+            for _ in range(1000):
+                perturbed_hr = x_hr + delta_hr
+                loss = torch.norm(self.preprocess[0](perturbed_hr) - perturbed_lr)
+                if save_loss is None:
+                    save_loss = loss
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
+
+            rnd_noise[i] = delta_hr.grad.cpu().numpy().astype(ART_NUMPY_DTYPE)
+
+        print(f'{save_loss.cpu().item():.2f} -> {loss.cpu().item():.2f}')
+        return rnd_noise
+
     def _adversarial_satisfactory(
         self, samples: np.ndarray, target: int, clip_min: float, clip_max: float
     ) -> np.ndarray:
