@@ -41,14 +41,14 @@ def attack_one(id, setid=False):
 
     classifier = BlackBoxClassifier(
         blackbox_model.predict,
-        input_shape=x_large.shape[1:],
+        input_shape=x_test.shape[1:],
         nb_classes=2,
         clip_values=(0, 1),
     )
 
     attack = MyHopSkipJump(classifier, max_iter=150, max_eval=200, max_query=args.query, preprocess=preprocess,
                            tag=pref)
-    attack.generate(x_large, np.array([1]))  # pos label is 1
+    attack.generate(x_test, np.array([1]))  # pos label is 1
 
     pickle.dump(attack.log, open(f'{pref}.log', 'wb'))
 
