@@ -36,7 +36,11 @@ def attack_one(id, setid=False):
 
     # Load ART proxy
     logger.info(f'Loading test image: id {id}, label {y_src}, shape {x_test.shape}, dtype {x_test.dtype}.')
-    if blackbox_model.set_current_sample(x_test) is None:
+    try:
+        if blackbox_model.set_current_sample(x_test) is None:
+            return
+    except Exception as e:
+        print(e)
         return
 
     classifier = BlackBoxClassifier(
@@ -48,7 +52,10 @@ def attack_one(id, setid=False):
 
     attack = MyHopSkipJump(classifier, max_iter=150, max_eval=200, max_query=args.query, preprocess=preprocess,
                            tag=pref)
-    attack.generate(x_test, np.array([1]))  # pos label is 1
+    try:
+        attack.generate(x_test, np.array([1]))  # pos label is 1
+    except Exception as e:
+        print(e)
 
     pickle.dump(attack.log, open(f'{pref}.log', 'wb'))
 
