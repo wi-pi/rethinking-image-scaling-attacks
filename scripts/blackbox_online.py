@@ -38,9 +38,10 @@ def attack_one(id, setid=False):
     logger.info(f'Loading test image: id {id}, label {y_src}, shape {x_test.shape}, dtype {x_test.dtype}.')
     try:
         if blackbox_model.set_current_sample(x_test) is None:
+            logger.error('No good enough true label, exit.')
             return
     except Exception as e:
-        print(e)
+        logger.error(e)
         return
 
     classifier = BlackBoxClassifier(
@@ -55,7 +56,7 @@ def attack_one(id, setid=False):
     try:
         attack.generate(x_test, np.array([1]))  # pos label is 1
     except Exception as e:
-        print(e)
+        logger.error(e)
 
     pickle.dump(attack.log, open(f'{pref}.log', 'wb'))
 

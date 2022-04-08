@@ -108,10 +108,32 @@ from itertools import cycle
 
 """Run SignOPT (no defense) with smart noise [RUNNING guard]
 """
-n_job = 4
-gpus = [0, 1, 2, 3]
+# n_job = 4
+# gpus = [0, 1, 2, 3]
+# for i, gpu in zip(range(n_job), cycle(gpus)):
+#     cmd = f'nohup python -m scripts.blackbox' \
+#           f' --scale 3 --defense none -l {i} -r 100 -s {n_job} -g {gpu} --tag opt_bad --attack opt --no-smart-noise' \
+#           f' 2>&1 > static/log/bb_none_opt_bad_{i}.log &'
+#     os.system(cmd)
+
+
+"""Run Online Attack (scale = 1)
+"""
+n_job = 20
+gpus = [2]
 for i, gpu in zip(range(n_job), cycle(gpus)):
-    cmd = f'nohup python -m scripts.blackbox' \
-          f' --scale 3 --defense none -l {i} -r 100 -s {n_job} -g {gpu} --tag opt_bad --attack opt --no-smart-noise' \
-          f' 2>&1 > static/log/bb_none_opt_bad_{i}.log &'
+    cmd = f'nohup python -u -m scripts.blackbox_online' \
+          f' --scale 1 -l {i} -r 100 -s {n_job} -g {gpu} --tag api_1x --query 3500' \
+          f' 2>&1 > static/log/api_1x_{i}.log &'
     os.system(cmd)
+
+
+"""Run Online Attack (scale = 3)
+"""
+# n_job = 20
+# gpus = [1]
+# for i, gpu in zip(range(n_job), cycle(gpus)):
+#     cmd = f'nohup python -u -m scripts.blackbox_online' \
+#           f' --scale 3 -l {i} -r 100 -s {n_job} -g {gpu} --tag api_3x --query 3500' \
+#           f' 2>&1 > static/log/api_3x_{i}.log &'
+#     os.system(cmd)
