@@ -55,7 +55,7 @@ def attack_one(id, setid=False):
                           nn.Sequential(pooling_layer, scaling_layer)]
 
     if args.attack == 'hsj':
-        attack = MyHopSkipJump(classifier, max_iter=100, max_eval=200, max_query=args.query, preprocess=preprocess,
+        attack = MyHopSkipJump(classifier, max_iter=150, max_eval=200, max_query=args.query, preprocess=preprocess,
                                tag=pref, smart_noise=not args.no_smart_noise)
         attack.generate(src, y_src[None])
     elif args.attack == 'opt':
