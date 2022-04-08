@@ -466,7 +466,7 @@ class MyHopSkipJump(EvasionAttack):
 
                 # logging
                 dist = np.linalg.norm(original_sample - current_sample)
-                pbar.set_postfix({'query': self.nb_query, 'l2': f'{dist:.3f}'})
+                pbar.set_postfix({'query': self.nb_query, 'l2': f'{dist:.5f}'})
                 self.log.append((i, self.nb_query, dist))
                 if self.nb_query > self.max_query:
                     break

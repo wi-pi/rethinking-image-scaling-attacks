@@ -16,17 +16,17 @@ from tencentcloud.tiia.v20190529.models import DetectLabelItem
 class OnlineModel(object):
     ID, KEY = map(os.environ.get, ['TENCENT_ID', 'TENCENT_KEY'])
 
-    def __init__(self):
+    def __init__(self, debug: bool = False):
         cred = credential.Credential(self.ID, self.KEY)
         self.client = tiia_client.TiiaClient(cred, region='ap-shanghai')
         self.current_label = None
         self.nb_query = 0
+        self.debug = debug
 
     def set_current_sample(self, x: np.ndarray) -> Optional[str]:
         true_label = self.get_true_label(x)
         self.current_label = true_label
         self.nb_query = 0
-        logger.debug(f'Get true label {true_label}')
         return true_label
 
     def predict(self, x: np.ndarray) -> np.ndarray:
@@ -54,7 +54,9 @@ class OnlineModel(object):
 
     def get_true_label(self, x: np.ndarray) -> Optional[str]:
         label = self.query(x)[0]
-        return label.Name if label.Confidence > 20 else None
+        true_label = label.Name if label.Confidence > 30 else None
+        logger.info(f'Get top label {label.Name} {label.Confidence}, set true label to {true_label}.')
+        return true_label
 
     def query(self, x: np.ndarray) -> List[DetectLabelItem]:
         if x.ndim == 4:
@@ -73,8 +75,10 @@ class OnlineModel(object):
 
         # Get respond labels
         prediction = self.client.DetectLabel(req).CameraLabels
-        msg = ', '.join(f'{pred.Name} {pred.Confidence}' for i, pred in enumerate(prediction) if i < 5)
-        logger.debug(msg)
+        if self.debug:
+            msg = ', '.join(f'{pred.Name} {pred.Confidence}' for i, pred in enumerate(prediction) if i < 5)
+            logger.debug(msg)
+
         return prediction
 
 

@@ -7,6 +7,7 @@ import torchvision.transforms as T
 from art.estimators.classification import BlackBoxClassifier
 from loguru import logger
 
+from exp.utils import savefig
 from scaleadv.attacks.hsj import MyHopSkipJump
 from scaleadv.datasets import get_imagenet
 from scaleadv.datasets.transforms import Align
@@ -29,6 +30,9 @@ def attack_one(id, setid=False):
         x_test = x_large
         scaling_layer = ScalingLayer.from_api(scaling_api).eval().cuda()
         preprocess = [scaling_layer, scaling_layer]
+
+    savefig(x_large, f'{pref}.large.png')
+    savefig(x_test, f'{pref}.test.png')
 
     # Load ART proxy
     logger.info(f'Loading test image: id {id}, label {y_src}, shape {x_test.shape}, dtype {x_test.dtype}.')
