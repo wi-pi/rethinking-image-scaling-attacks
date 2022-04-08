@@ -1,5 +1,6 @@
 from functools import partial
 from pathlib import Path
+from typing import Sequence
 
 import torch
 from torchvision.datasets import CelebA
@@ -18,8 +19,12 @@ SUBSET_ATTRS = ('Attractive', 'Bags_Under_Eyes', 'Bangs', 'Chubby', 'Eyeglasses'
 
 def get_celeba(root: Path = DATASET_PATH, split='test', attrs=SUBSET_ATTRS, transform=None):
     # get attr index
-    index = torch.tensor(list(map(FULL_ATTRS.index, attrs)))
-    target_transform = partial(torch.take, index=index)
+    index = list(map(FULL_ATTRS.index, attrs))
+
+    if len(attrs) == 1:
+        target_transform = lambda y: y[index[0]]
+    else:
+        target_transform = partial(torch.take, index=torch.tensor(index))
 
     # get dataset
     root = Path(root)

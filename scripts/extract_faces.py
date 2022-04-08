@@ -4,22 +4,21 @@ import pickle
 import torch
 import torchvision.transforms.functional as F
 from facenet_pytorch import MTCNN
-from torchvision.models import resnet34
 from tqdm import trange
 
 from scaleadv.datasets.celeba import get_celeba, SUBSET_ATTRS
+from scaleadv.models.celeba import celeba_resnet34
 
 if __name__ == '__main__':
     # data
     dataset = get_celeba(root='static/datasets/celeba', attrs=SUBSET_ATTRS, transform=None)
 
     # face extractor
-    mtcnn = MTCNN(image_size=224 * 5)
+    mtcnn = MTCNN(image_size=224 * 5, post_process=False)
 
     # model
-    model = resnet34(num_classes=len(SUBSET_ATTRS)).cuda()
-    ckpt = torch.load('static/models/celeba-res34.pth', map_location='cpu')
-    model.load_state_dict(ckpt)
+    model = celeba_resnet34(num_classes=len(SUBSET_ATTRS), ckpt='static/models/celeba-res34.pth')
+    model = model.eval().cuda()
 
     # process
     y_true_all, y_pred_all = [], []
