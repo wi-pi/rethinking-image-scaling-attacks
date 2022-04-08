@@ -5,6 +5,7 @@ opencv-python
 Pillow
 piq
 adversarial-robustness-toolbox
+facenet-pytorch
 
 # plots
 matplotlib
