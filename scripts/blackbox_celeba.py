@@ -56,7 +56,7 @@ def attack_one(id, setid=False):
 
     if args.attack == 'hsj':
         attack = MyHopSkipJump(classifier, max_iter=150, max_eval=200, max_query=args.query, preprocess=preprocess,
-                               tag=pref, smart_noise=not args.no_smart_noise)
+                               tag=pref, smart_noise=not args.no_smart_noise, use_precise_noise=args.precise_noise)
         attack.generate(src, y_src[None])
     elif args.attack == 'opt':
         attack = SignOPT(classifier, k=200, preprocess=preprocess, smart_noise=not args.no_smart_noise)
@@ -86,6 +86,7 @@ if __name__ == '__main__':
     _('--tag', default='test', type=str)
     _('--no-smart-noise', action='store_true')
     _('--no-smart-median', action='store_true')
+    _('--precise-noise', action='store_true')
     # Black-box attack args
     _('--attack', default='hsj', choices=['hsj', 'opt'], help='blackbox attack')
     args = p.parse_args()

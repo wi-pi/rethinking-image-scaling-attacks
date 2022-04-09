@@ -79,6 +79,7 @@ class MyHopSkipJump(EvasionAttack):
         preprocess = None,
         tag: str = None,
         smart_noise: bool = True,
+        use_precise_noise: bool = False,
     ) -> None:
         """
         Create a HopSkipJump attack instance.
@@ -107,6 +108,8 @@ class MyHopSkipJump(EvasionAttack):
         self.preprocess = preprocess
         self.tag = tag
         self.smart_noise = smart_noise
+        self.use_precise_noise = use_precise_noise
+        print(f'Use precise noise: {use_precise_noise}')
 
         # Set binary search threshold
         if norm == 2:
@@ -591,7 +594,10 @@ class MyHopSkipJump(EvasionAttack):
             else:
                 rnd_noise = np.random.uniform(low=-1, high=1, size=rnd_noise_shape).astype(ART_NUMPY_DTYPE)
         else:
-            rnd_noise = self._get_noise(current_sample, num_eval, it)
+            if self.use_precise_noise:
+                rnd_noise = self._get_noise_precise(current_sample, num_eval, it)
+            else:
+                rnd_noise = self._get_noise(current_sample, num_eval, it)
 
         # With mask
         if mask is not None:
