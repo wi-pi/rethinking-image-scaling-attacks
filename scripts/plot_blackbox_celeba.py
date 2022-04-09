@@ -95,7 +95,6 @@ if __name__ == '__main__':
     BLUE, ORANGE, GREEN, RED = plt.rcParams['axes.prop_cycle'].by_key()['color'][:4]
 
     id_list = range(0, 200, 2)
-    # query_budgets = np.array([0.1, 0.2, 0.5, 1, 5, 10])
     query_budgets = np.arange(1, 21)
     pert_budgets = np.arange(0, 2.1, 0.1)
 
@@ -105,5 +104,12 @@ if __name__ == '__main__':
 
     print('data loaded:', data_hsj_1x.shape, data_hsj_3x.shape, data_hsj_5x.shape)
 
-    plot_celeba()
-    plot_sar_vs_pert('none')
+    for q in [10, 15, 20]:
+        for d in [data_hsj_1x, data_hsj_3x, data_hsj_5x]:
+            pert = np.median(d[q - 1])
+            sar = np.mean(d[q - 1] <= 2) * 100
+            print(f'{pert:.2f} {sar:.1f}')
+        print()
+
+    # plot_celeba()
+    # plot_sar_vs_pert('none')
