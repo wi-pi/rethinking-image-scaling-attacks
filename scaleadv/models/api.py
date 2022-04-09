@@ -1,5 +1,6 @@
 import io
 import os
+import time
 from base64 import b64encode
 from typing import List, Optional
 
@@ -73,8 +74,21 @@ class OnlineModel(object):
         req.ImageBase64 = b64encode(buf.getvalue()).decode()
         req.Scenes = ['CAMERA']
 
-        # Get respond labels
-        prediction = self.client.DetectLabel(req).CameraLabels
+        # Get respond labels (repeat 5 times on failure)
+        prediction = None
+        for i in range(5):
+            try:
+                prediction = self.client.DetectLabel(req).CameraLabels
+            except Exception as err:
+                logger.warning(err)
+                time.sleep(5)
+                continue
+
+            break
+
+        if prediction is None:
+            raise Exception('Query failed.')
+
         if self.debug:
             msg = ', '.join(f'{pred.Name} {pred.Confidence}' for i, pred in enumerate(prediction) if i < 5)
             logger.debug(msg)
