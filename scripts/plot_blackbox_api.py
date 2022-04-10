@@ -29,10 +29,13 @@ if __name__ == '__main__':
     data_api_1x = load_data('static/online_bb_api_1x/{}.ratio_1.def_none.log')
     data_api_1x = np.nan_to_num(data_api_1x)
 
-    print('data loaded:', data_api_1x.shape)
+    data_api_3x = load_data('static/online_bb_api_3x/{}.ratio_3.def_none.log') / 3
+    data_api_3x = np.nan_to_num(data_api_3x)
+
+    print('data loaded:', data_api_1x.shape, data_api_3x.shape)
 
     for q in [1, 2, 3]:
-        for d in [data_api_1x]:
+        for d in [data_api_1x, data_api_3x]:
             pert = np.median(d[q - 1])
             sar = np.mean(d[q - 1] <= 2) * 100
             print(f'{pert:.2f} {sar:.1f}')
