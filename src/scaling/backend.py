@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 from loguru import logger
 
-from scaleadv.scaling.enum import ScalingAlg, ScalingLib
+from src.scaling.enum import ScalingAlg, ScalingLib
 
 # type alias
 Shape = tuple[int, int]
@@ -68,13 +68,14 @@ class ScalingBackend(ABC):
 def get_backend(lib: ScalingLib, alg: ScalingAlg) -> ScalingBackend:
     """Retrieve scaling backend given the lib and alg.
     """
-    # use lazy import to avoid importing overheads.
-    if lib == ScalingLib.CV:
-        from scaleadv.scaling import cv
-        return cv.ScalingBackendCV(alg)
+    match lib:
+        case ScalingLib.CV:
+            from src.scaling import cv
+            return cv.ScalingBackendCV(alg)
 
-    if lib == ScalingLib.PIL:
-        from scaleadv.scaling import pil
-        return pil.ScalingBackendPIL(alg)
+        case ScalingLib.PIL:
+            from src.scaling import pil
+            return pil.ScalingBackendPIL(alg)
 
-    raise NotImplementedError(f'Backend "{lib}" not implemented.')
+        case _:
+            raise NotImplementedError(f'Backend "{lib}" not implemented.')

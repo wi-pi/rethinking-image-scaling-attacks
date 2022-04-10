@@ -4,8 +4,8 @@ This module implements the PIL scaling backend.
 import numpy as np
 from PIL import Image
 
-from scaleadv.scaling.backend import ScalingBackend, Shape
-from scaleadv.scaling.enum import ScalingAlg
+from src.scaling.backend import ScalingBackend, Shape
+from src.scaling.enum import ScalingAlg
 
 
 class ScalingBackendPIL(ScalingBackend):

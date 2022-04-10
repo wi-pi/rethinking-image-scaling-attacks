@@ -1,14 +1,12 @@
 """
 This module implements scaling backends as unified API.
 """
-from typing import Optional, Union
-
 import numpy as np
 from loguru import logger
 from scipy import linalg
 
-from scaleadv.scaling.backend import Shape, get_backend
-from scaleadv.scaling.enum import ScalingAlg, ScalingLib, str_to_alg, str_to_lib
+from src.scaling.backend import Shape, get_backend
+from src.scaling.enum import ScalingAlg, ScalingLib, str_to_alg, str_to_lib
 
 
 class ScalingAPI(object):
@@ -33,7 +31,7 @@ class ScalingAPI(object):
       >>> x_small = api(x_big)
     """
 
-    def __init__(self, src_shape: Shape, tgt_shape: Shape, lib: Union[ScalingLib, str], alg: Union[ScalingAlg, str]):
+    def __init__(self, src_shape: Shape, tgt_shape: Shape, lib: ScalingLib | str, alg: ScalingAlg | str):
         # Convert lib str to enums
         if isinstance(lib, str):
             if lib not in str_to_lib:
@@ -63,7 +61,7 @@ class ScalingAPI(object):
         # logger.debug(f'Create scaling api: src {src_shape}, tgt {tgt_shape}, lib {lib}, alg {alg}.')
         logger.info(f'Creating {self}')
 
-    def __call__(self, x: np.ndarray, shape: Optional[Shape] = None):
+    def __call__(self, x: np.ndarray, shape: Shape | None = None):
         if x.ndim != 3:
             raise ValueError(f'Only support 3 dimensions, but got {x.ndim}.')
         if x.shape[0] not in [1, 3]:

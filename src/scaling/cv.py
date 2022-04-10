@@ -4,8 +4,8 @@ This module implements the OpenCV scaling backend.
 import cv2 as cv
 import numpy as np
 
-from scaleadv.scaling.backend import ScalingBackend, Shape
-from scaleadv.scaling.enum import ScalingAlg
+from src.scaling.backend import ScalingBackend, Shape
+from src.scaling.enum import ScalingAlg
 
 
 class ScalingBackendCV(ScalingBackend):

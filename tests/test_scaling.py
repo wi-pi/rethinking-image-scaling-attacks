@@ -5,11 +5,9 @@ import torch
 import torchvision.transforms.functional as F
 from PIL import Image
 
-from scaleadv.scaling.api import ScalingAPI
-from scaleadv.scaling.backend import Shape
-from scaleadv.scaling.cv import ScalingBackendCV
-from scaleadv.scaling.enum import ScalingAlg, ScalingLib
-from scaleadv.scaling.pil import ScalingBackendPIL
+from src.scaling import *
+from src.scaling.cv import ScalingBackendCV
+from src.scaling.pil import ScalingBackendPIL
 
 lib_list = list(ScalingLib)
 alg_list = list(ScalingAlg)
@@ -105,7 +103,7 @@ class TestScalingLayer(object):
         api_img = api(img)
 
         # Scaling layer
-        from scaleadv.models import ScalingLayer
+        from src.models import ScalingLayer
         scaling = ScalingLayer.from_api(api).cuda()
         img = torch.tensor(img)[None, ...].cuda()
         scaling_img = scaling(img)[0].cpu().numpy()
