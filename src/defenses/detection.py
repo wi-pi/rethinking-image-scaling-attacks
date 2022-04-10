@@ -2,8 +2,8 @@ import numpy as np
 import piq
 import torch
 
-from scaleadv.scaling import ScalingAPI
-from . import Pooling, MinPooling
+from src.defenses.prevention import Pooling, MinPooling
+from src.scaling import ScalingAPI
 
 
 class Detection(object):

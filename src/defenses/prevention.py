@@ -1,8 +1,10 @@
 """
 This module implements prevention-based defenses as pooling layers.
 """
+from __future__ import annotations
+
 from abc import abstractmethod, ABC
-from typing import Optional, Union, Tuple, TypeVar, Type, Dict, Any, List
+from typing import Any
 
 import numpy as np
 import torch
@@ -11,8 +13,6 @@ import torch.nn.functional as F
 from loguru import logger
 from scipy import signal
 from torch.nn.modules.utils import _pair, _quadruple
-
-T = TypeVar('T')
 
 
 class Pooling(nn.Module, ABC):
@@ -37,13 +37,13 @@ class Pooling(nn.Module, ABC):
     preferred_device = torch.device('cuda')
 
     def __init__(
-            self,
-            kernel_size: Union[int, Tuple[int, int]],
-            stride: Union[int, Tuple[int, int]],
-            padding: Union[int, Tuple[int, int, int, int]],
-            mask: Optional[np.ndarray] = None,
+        self,
+        kernel_size: int | tuple[int, int],
+        stride: int | tuple[int, int],
+        padding: int | tuple[int, int, int, int],
+        mask: np.ndarray | None = None,
     ):
-        super(Pooling, self).__init__()
+        super().__init__()
         self.kernel_size = _pair(kernel_size)
         self.stride = _pair(stride)
         self.padding = _quadruple(padding)  # convert to l, r, t, b
@@ -52,17 +52,17 @@ class Pooling(nn.Module, ABC):
                     f'padding {padding}, mask {mask is not None}.')
 
     @classmethod
-    def like(cls: Type[T], pool: "Pooling") -> T:
+    def like(cls, pool: Pooling):
         """Return a new pooling layer with the same parameters."""
         return cls(pool.kernel_size, pool.stride, pool.padding, pool.mask)
 
     @classmethod
-    def auto(cls: Type[T], kernel_size: Union[int, Tuple[int, int]], mask: Optional[np.ndarray] = None, **kwargs) -> T:
+    def auto(cls, kernel_size: int | tuple[int, int], mask: np.ndarray | None = None):
         """Return a pooling layer with auto determined parameters that fit the kernel size."""
         kh, kw = _pair(kernel_size)
         pt, pl = kh // 2, kw // 2
         pb, pr = kh - pt - 1, kw - pl - 1
-        return cls(kernel_size=(kh, kw), stride=1, padding=(pl, pr, pt, pb), mask=mask, **kwargs)
+        return cls(kernel_size=(kh, kw), stride=1, padding=(pl, pr, pt, pb), mask=mask)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.pooling(x)
@@ -115,8 +115,7 @@ class MedianPooling(Pooling):
     """Replace each pixel by the median of a window."""
 
     def pooling(self, x: torch.Tensor) -> torch.Tensor:
-        med = self.unfold(x).median(dim=-1).values
-        return med
+        return self.unfold(x).median(dim=-1).values
 
 
 class QuantilePooling(Pooling):
@@ -127,9 +126,7 @@ class QuantilePooling(Pooling):
 
     def pooling(self, x: torch.Tensor) -> torch.Tensor:
         x = self.unfold(x)
-        # out = x.median(dim=-1).values
 
-        # center quantile
         low = x.quantile(0.3, dim=-1)[..., None]
         med = x.median(dim=-1).values[..., None]
         high = x.quantile(0.7, dim=-1)[..., None]
@@ -171,16 +168,16 @@ class RandomPooling(Pooling, ABC):
         prob_kernel: a tensor of shape kernel_size.
     """
 
-    required_prob_kwargs: List[str] = []
+    required_prob_kwargs: list[str] = []
 
-    def __init__(self, *args, prob_kwargs: Optional[Dict[str, Any]] = None, **kwargs):
-        super(RandomPooling, self).__init__(*args, **kwargs)
+    def __init__(self, *args, prob_kwargs: dict[str, Any] | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
         logger.info(f'Prob kwargs: {prob_kwargs}')
         self.prob_kwargs = self._check_prob_kwargs(prob_kwargs)
         self.prob_kernel = self._prob_kernel_2d()
         logger.info(f'Use prob kernel:\n {self.prob_kernel.numpy()}')
 
-    def _check_prob_kwargs(self, prob_kwargs: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _check_prob_kwargs(self, prob_kwargs: dict[str, Any] | None) -> dict[str, Any]:
         for req in self.required_prob_kwargs:
             if req not in prob_kwargs:
                 raise ValueError(f'Parameter "{req}" required, but not found in {prob_kwargs}.')
@@ -196,7 +193,7 @@ class RandomPooling(Pooling, ABC):
         k = torch.tensor(np.outer(*k), dtype=torch.float32)
         return k / k.sum()
 
-    def randint(self, low: int, high: int, size: Tuple[int, ...]) -> torch.Tensor:
+    def randint(self, low: int, high: int, size: tuple[int, ...]) -> torch.Tensor:
         a = np.arange(low, high)
         p = self._prob_kernel_1d(len(a))
         out = np.random.choice(a, size, p=p)
@@ -303,19 +300,3 @@ POOLING_MAPS = {
     'gaussian': RandomPoolingGaussian,
     'laplacian': RandomPoolingLaplacian,
 }
-if __name__ == '__main__':
-    mask = torch.tensor([[0, 0, 0, 0, 0],
-                         [0, 1, 0, 1, 0],
-                         [0, 0, 0, 0, 0],
-                         [0, 1, 0, 1, 0],
-                         [0, 0, 0, 0, 0]]).reshape(1, 1, 5, 5).float().cuda()
-    p = SoftMedianPooling(3, 1, 1, mask).cuda()
-
-    # a = torch.randint(20, (1,1,5,5)).float().cuda().requires_grad_()
-    a = torch.tensor([[1, 4, 3, 4, 1],
-                      [1, 4, 1, 4, 1],
-                      [1, 4, 4, 4, 1],
-                      [1, 2, 3, 4, 5],
-                      [6, 6, 6, 7, 7]]).reshape(1, 1, 5, 5).float().cuda().requires_grad_()
-    b = p(a).cuda()
-    (b * mask).sum().backward()
