@@ -17,23 +17,21 @@ from tencentcloud.tiia.v20190529.models import DetectLabelItem
 class OnlineModel(object):
     ID, KEY = map(os.environ.get, ['TENCENT_ID', 'TENCENT_KEY'])
 
-    def __init__(self, debug: bool = False):
+    def __init__(self, threshold: int = 30, debug: bool = False):
         cred = credential.Credential(self.ID, self.KEY)
         self.client = tiia_client.TiiaClient(cred, region='ap-shanghai')
         self.current_label = None
-        self.nb_query = 0
+        self.threshold = threshold
         self.debug = debug
 
     def set_current_sample(self, x: np.ndarray) -> Optional[str]:
         true_label = self.get_true_label(x)
         self.current_label = true_label
-        self.nb_query = 0
         return true_label
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         # Query
         prediction = self.query(x)
-        self.nb_query += 1
 
         # Get confidence of true label
         pos_score = 0
@@ -55,7 +53,7 @@ class OnlineModel(object):
 
     def get_true_label(self, x: np.ndarray) -> Optional[str]:
         label = self.query(x)[0]
-        true_label = label.Name if label.Confidence > 30 else None
+        true_label = label.Name if label.Confidence > self.threshold else None
         logger.info(f'Get top label {label.Name} {label.Confidence}, set true label to {true_label}.')
         return true_label
 
@@ -96,8 +94,8 @@ class OnlineModel(object):
         return prediction
 
 
-if __name__ == '__main__':
-    model = OnlineModel()
+def test():
+    model = OnlineModel(threshold=0)
 
     file_list = [
         'testcases/scaling-attack/source.png',
@@ -109,4 +107,8 @@ if __name__ == '__main__':
         x = F.to_tensor(Image.open(name)).numpy()
         y_true = model.set_current_sample(x)
         y_pred = model.predict(x)
-        print(y_true, y_pred)
+        print(name, y_true, y_pred)
+
+
+if __name__ == '__main__':
+    test()

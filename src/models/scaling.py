@@ -1,7 +1,7 @@
 import torch.nn as nn
 
 from scaleadv.defenses.prevention import Pooling
-from .layers import ScalingLayer
+from src.models import ScalingLayer
 
 
 class FullNet(nn.Module):
