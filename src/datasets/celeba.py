@@ -1,4 +1,3 @@
-from functools import partial
 from pathlib import Path
 from typing import Sequence
 
@@ -13,21 +12,23 @@ FULL_ATTRS = ('5_o_Clock_Shadow', 'Arched_Eyebrows', 'Attractive', 'Bags_Under_E
               'Mustache', 'Narrow_Eyes', 'No_Beard', 'Oval_Face', 'Pale_Skin', 'Pointy_Nose', 'Receding_Hairline',
               'Rosy_Cheeks', 'Sideburns', 'Smiling', 'Straight_Hair', 'Wavy_Hair', 'Wearing_Earrings', 'Wearing_Hat',
               'Wearing_Lipstick', 'Wearing_Necklace', 'Wearing_Necktie', 'Young')
-SUBSET_ATTRS = ('Attractive', 'Bags_Under_Eyes', 'Bangs', 'Chubby', 'Eyeglasses', 'Male', 'Mouth_Slightly_Open',
-                'Mustache', 'Smiling', 'Wearing_Lipstick', 'Young')
 
 
-def get_celeba(root: Path = DATASET_PATH, split='test', attrs=SUBSET_ATTRS, transform=None):
-    # get attr index
-    index = list(map(FULL_ATTRS.index, attrs))
+def get_celeba(split='test', attrs: Sequence[str] = FULL_ATTRS, transform=None):
+    # get subset attr index
+    attr_index = list(map(FULL_ATTRS.index, attrs))
 
-    if len(attrs) == 1:
-        target_transform = lambda y: y[index[0]]
-    else:
-        target_transform = partial(torch.take, index=torch.tensor(index))
+    # define target transform
+    def target_transform(y: torch.Tensor):
+        y = torch.take(y, index=torch.tensor(attr_index)).squeeze(dim=-1)
+        if y.ndim == 0:
+            y = y.item()  # return scalar if not multi-class
+
+        return y
 
     # get dataset
-    root = Path(root)
+    root = Path(DATASET_PATH)
     CelebA.base_folder = root.name
-    dataset = CelebA(root=root.parent, split=split, transform=transform, target_transform=target_transform)
+    dataset = CelebA(root=str(root.parent), split=split, transform=transform, target_transform=target_transform)
+
     return dataset

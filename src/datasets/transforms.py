@@ -1,7 +1,6 @@
 from math import ceil
-from typing import Optional
 
-import torchvision.transforms.functional as F
+import torchvision.transforms.functional_pil as F_pil
 from PIL.Image import Image as ImageType
 
 
@@ -14,19 +13,25 @@ class Align(object):
         square: align to a square.
     """
 
-    def __init__(self, align: int, ratio: Optional[int] = None, square: bool = False):
+    def __init__(self, align: int, ratio: int | None = None, square: bool = False):
         self.align = align
         self.ratio = ratio
         self.square = square
 
-    def __call__(self, img: ImageType):
+    def __call__(self, img: ImageType) -> ImageType:
+        assert isinstance(img, ImageType)
+
+        # determine output shape
         if self.ratio is not None:
             w = h = self.align * self.ratio
         else:
             w, h = map(self._round_up, img.size)
+
+        # determine output shape if square required
         if self.square:
             w = h = min(w, h)
-        return F.resize(img, (w, h))
 
-    def _round_up(self, x: int):
+        return F_pil.resize(img, [w, h])
+
+    def _round_up(self, x: int) -> int:
         return self.align * ceil(x / self.align)
