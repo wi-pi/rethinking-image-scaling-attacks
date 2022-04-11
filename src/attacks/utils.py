@@ -11,8 +11,8 @@ from loguru import logger
 from torch.autograd import Variable
 from tqdm import trange
 
-from scaleadv.defenses.prevention import Pooling
-from scaleadv.defenses.prevention import RandomPooling
+from src.defenses.prevention import Pooling
+from src.defenses.prevention import RandomPooling
 
 
 def img_to_tanh(x: torch.Tensor) -> torch.Tensor:
@@ -52,7 +52,6 @@ class SmartPooling(nn.Module):
         if not self.is_random:
             self.nb_iter += 1
             return self.pooling_layer(x)
-
 
         # expectation part
         xp = self.pooling_layer.apply_padding(x)

@@ -4,14 +4,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 from art.attacks import EvasionAttack
-from art.estimators.classification import PyTorchClassifier
 from torch.autograd import Variable
 from tqdm import trange
 
-from scaleadv.attacks.utils import PyTorchClassifierFull, img_to_tanh, tanh_to_img
-from scaleadv.defenses import Pooling
-from scaleadv.models import FullNet, ScalingLayer
-from scaleadv.scaling import ScalingAPI
+from src.attacks.utils import PyTorchClassifierFull, img_to_tanh, tanh_to_img
+from src.defenses import Pooling
+from src.models import FullNet, ScalingLayer
+from src.scaling import ScalingAPI
 
 ART_ATTACK = TypeVar('ART_ATTACK', bound=EvasionAttack)
 
@@ -33,13 +32,13 @@ class ScaleAttack(object):
     """
 
     def __init__(
-            self,
-            scaling_api: ScalingAPI,
-            pooling_layer: Pooling,
-            class_network: nn.Module,
-            nb_samples: int = 1,
-            nb_flushes: int = 20,
-            verbose=False
+        self,
+        scaling_api: ScalingAPI,
+        pooling_layer: Pooling,
+        class_network: nn.Module,
+        nb_samples: int = 1,
+        nb_flushes: int = 20,
+        verbose=False
     ):
         # Init network
         self.pooling_layer = pooling_layer

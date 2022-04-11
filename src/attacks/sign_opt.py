@@ -1,5 +1,3 @@
-import time
-
 import numpy as np
 import torch
 import torchvision.transforms.functional as F
@@ -7,17 +5,31 @@ from art.estimators.classification import PyTorchClassifier
 from numpy import linalg as LA
 from tqdm import trange
 
-MAX_ITER = 1000
+from src.attacks.smart_noise import SmartNoise
 
 
-class SignOPT(object):
+class QueryLimitSignOPT(object):
 
-    def __init__(self, model: PyTorchClassifier, k: int = 200, preprocess=None, smart_noise=False):
+    def __init__(
+        self,
+        model: PyTorchClassifier,
+        max_iter: int = 1000,
+        num_eval: int = 200,
+        alpha: float = 0.2,
+        beta: float = 0.001,
+        # New args
+        max_query: int = 10000,
+        smart_noise: SmartNoise | None = None,
+    ):
         self.model = model
-        self.k = k
-        self.log = []
-        self.preprocess = preprocess
+        self.max_iter = max_iter
+        self.num_eval = num_eval
+        self.alpha = alpha
+        self.beta = beta
+
+        self.max_query = max_query
         self.smart_noise = smart_noise
+        self.log = []
 
     def is_adversary(self, x: np.ndarray, y: int):
         x = np.clip(x, 0, 1)
@@ -25,7 +37,7 @@ class SignOPT(object):
         pred = self.model.predict(x).argmax(1).item()
         return pred != y
 
-    def generate(self, x0: np.ndarray, y0: int, alpha=0.2, beta=0.001, iterations=1000, query_limit=20000, tag=None):
+    def generate(self, x0: np.ndarray, y0: int, tag=None):
         """ Attack the original image and return adversarial example
             model: (pytorch model)
             train_dataset: set of training data
@@ -39,7 +51,12 @@ class SignOPT(object):
             print("Fail to classify the image. No need to attack.")
             return x0, 0, True, 0, None
 
-        nb_queries = 0
+        """
+        Init: params
+        """
+        alpha = self.alpha
+        beta = self.beta
+        nb_query = 0
 
         """
         Init: find a good starting point (direction)
@@ -50,7 +67,7 @@ class SignOPT(object):
             theta = np.random.randn(*x0.shape).astype(np.float32)
 
             # check if theta is an adv example
-            nb_queries += 1
+            nb_query += 1
             if self.is_adversary(x0 + theta, y0):
                 # l2 normalize
                 initial_lbd = LA.norm(theta)
@@ -58,7 +75,7 @@ class SignOPT(object):
 
                 # binary search a point near the boundary
                 lbd, count = self.fine_grained_binary_search(x0, y0, theta, initial_lbd, g_theta)
-                nb_queries += count
+                nb_query += count
 
                 # record the best theta
                 if lbd < g_theta:
@@ -67,16 +84,16 @@ class SignOPT(object):
         # cannot find an adv example
         if g_theta == float('inf'):
             print("Couldn't find valid initial, failed")
-            return x0, 0, False, nb_queries, best_theta
+            return x0, 0, False, nb_query, best_theta
 
-        print(f"========> Found best distortion {g_theta:.4f} using {nb_queries} queries")
+        print(f"========> Found best distortion {g_theta:.4f} using {nb_query} queries")
 
         """
         Gradient Descent
         """
         xg, gg = best_theta, g_theta
         vg = np.zeros_like(xg)
-        with trange(iterations, desc='SignOPT') as pbar:
+        with trange(self.max_iter, desc='SignOPT') as pbar:
             for i in pbar:
                 # estimate the gradient at x0 + theta
                 sign_gradient, grad_queries = self.sign_grad_v1(x0, y0, xg, initial_lbd=gg, h=beta)
@@ -133,15 +150,15 @@ class SignOPT(object):
                     F.to_pil_image(torch.as_tensor(adv)).save(f'{tag}.{i:02d}.png')
 
                 # logging
-                nb_queries += grad_queries + ls_count
-                pbar.set_postfix({'query': nb_queries, 'l2': f'{gg:.3f}'})
-                self.log.append((i, nb_queries, gg))
+                nb_query += grad_queries + ls_count
+                pbar.set_postfix({'query': nb_query, 'l2': f'{gg:.3f}'})
+                self.log.append((i, nb_query, gg))
 
                 # stop if we reach the query limit
-                if nb_queries > query_limit:
+                if nb_query > self.max_query:
                     break
 
-        return x0 + gg * xg, gg, True, nb_queries, xg
+        return x0 + gg * xg, gg, True, nb_query, xg
 
     def sign_grad_v1(self, x0: np.ndarray, y0: int, theta: np.ndarray, initial_lbd: float, h: str = 0.001):
         """
@@ -151,10 +168,14 @@ class SignOPT(object):
         sign_grad = np.zeros_like(theta)
         x_adv = x0 + initial_lbd * theta
 
-        for i in range(self.k):
+        if self.smart_noise:
+            u_all = self.smart_noise(x_adv, self.num_eval)
+        else:
+            u_all = np.random.randn(self.num_eval, *theta.shape).astype(np.float32)
+
+        for i in range(self.num_eval):
             # get unit noise
-            is_smart = self.smart_noise and self.preprocess
-            u = self.get_noise(x_adv) if is_smart else np.random.randn(*theta.shape).astype(np.float32)
+            u = u_all[i]
             u = u / LA.norm(u)
 
             # get unit new theta
@@ -164,9 +185,9 @@ class SignOPT(object):
             sign = -1 if self.is_adversary(x0 + initial_lbd * new_theta, y0) else 1
             sign_grad += u * sign
 
-        sign_grad /= self.k
+        sign_grad /= self.num_eval
 
-        return sign_grad, self.k
+        return sign_grad, self.num_eval
 
     def fine_grained_binary_search_local(
         self, x0: np.ndarray, y0: int, theta: np.ndarray,
@@ -223,13 +244,3 @@ class SignOPT(object):
                 lbd_lo = lbd_mid
 
         return lbd_hi, nb_queries
-
-    def get_noise(self, x0: np.ndarray):
-        x_hr = torch.as_tensor(x0, dtype=torch.float32).cuda()
-        delta_lr = torch.randn(1, 3, 224, 224).cuda()
-        delta_hr = torch.zeros_like(x_hr).requires_grad_()
-        perturbed_hr = x_hr + delta_hr
-        perturbed_lr = self.preprocess[1](x_hr) + delta_lr
-        loss = torch.norm(self.preprocess[0](perturbed_hr) - perturbed_lr)
-        loss.backward()
-        return delta_hr.grad.cpu().numpy().astype(np.float32)
