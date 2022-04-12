@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from scaleadv.defenses.prevention import Pooling
+from src.defenses import Pooling
 from src.models import ScalingLayer
 
 

@@ -14,6 +14,8 @@ from loguru import logger
 from scipy import signal
 from torch.nn.modules.utils import _pair, _quadruple
 
+from src.scaling import ScalingAPI
+
 
 class Pooling(nn.Module, ABC):
     """The base class for all pooling based defenses.
@@ -63,6 +65,11 @@ class Pooling(nn.Module, ABC):
         pt, pl = kh // 2, kw // 2
         pb, pr = kh - pt - 1, kw - pl - 1
         return cls(kernel_size=(kh, kw), stride=1, padding=(pl, pr, pt, pb), mask=mask)
+
+    @classmethod
+    def from_api(cls, scaling: ScalingAPI):
+        """Return a pooling layer with auto determined parameters (from scaling api) that fit the kernel size."""
+        return cls.auto(kernel_size=round(scaling.ratio) * 2 - 1, mask=scaling.mask)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.pooling(x)

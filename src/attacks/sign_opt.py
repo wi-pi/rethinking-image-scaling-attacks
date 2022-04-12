@@ -8,7 +8,7 @@ from tqdm import trange
 from src.attacks.smart_noise import SmartNoise
 
 
-class QueryLimitSignOPT(object):
+class SignOPT(object):
 
     def __init__(
         self,
@@ -93,7 +93,7 @@ class QueryLimitSignOPT(object):
         """
         xg, gg = best_theta, g_theta
         vg = np.zeros_like(xg)
-        with trange(self.max_iter, desc='SignOPT') as pbar:
+        with trange(self.max_iter, desc='SignOPT', bar_format='{l_bar}{r_bar}') as pbar:
             for i in pbar:
                 # estimate the gradient at x0 + theta
                 sign_gradient, grad_queries = self.sign_grad_v1(x0, y0, xg, initial_lbd=gg, h=beta)

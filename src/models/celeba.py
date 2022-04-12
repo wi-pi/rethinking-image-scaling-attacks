@@ -1,7 +1,11 @@
 import torch
 import torch.nn as nn
+from loguru import logger
 from torchvision.models import resnet34
 
+CELEBA_MODEL_PATH = {
+    'nature': 'static/models/celeba-res34.pth',
+}
 
 class SingleToBinary(nn.Module):
     """A simple (non-differentiable) module that converts one neuron to binary sigmoid outputs.
@@ -26,6 +30,8 @@ def celeba_resnet34(num_classes: int, binary_label: int | None = None, ckpt: str
     model = resnet34(num_classes=num_classes)
 
     if ckpt is not None:
+        ckpt = CELEBA_MODEL_PATH['nature']
+        logger.info(f'Loading weight file from "{ckpt}".')
         ckpt = torch.load(ckpt, map_location='cpu')
         model.load_state_dict(ckpt)
 

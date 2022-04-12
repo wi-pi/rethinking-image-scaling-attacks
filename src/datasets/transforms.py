@@ -1,5 +1,7 @@
 from math import ceil
 
+import numpy as np
+import torch
 import torchvision.transforms.functional_pil as F_pil
 from PIL.Image import Image as ImageType
 
@@ -35,3 +37,15 @@ class Align(object):
 
     def _round_up(self, x: int) -> int:
         return self.align * ceil(x / self.align)
+
+
+class ToNumpy(object):
+
+    def __init__(self, batch: bool = True):
+        self.batch = batch
+
+    def __call__(self, x: torch.Tensor):
+        x = x.numpy().astype(np.float32)
+        if self.batch:
+            x = x[None]
+        return x

@@ -9,7 +9,7 @@ from tqdm import trange
 from src.attacks.smart_noise import SmartNoise
 
 
-class QueryLimitHSJ(HopSkipJump):
+class HSJ(HopSkipJump):
     """Adapted from ART v1.10.0
     """
 
@@ -59,7 +59,7 @@ class QueryLimitHSJ(HopSkipJump):
         current_sample = initial_sample
 
         # Main loop to wander around the boundary
-        for _ in (pbar := trange(self.max_iter, desc='HopSkipJump')):
+        for _ in (pbar := trange(self.max_iter, desc='HopSkipJump', bar_format='{l_bar}{r_bar}')):
             print()
             # First compute delta
             delta = self._compute_delta(

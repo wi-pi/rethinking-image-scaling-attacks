@@ -9,17 +9,16 @@ from art.estimators.classification import PyTorchClassifier
 from facenet_pytorch.models.mtcnn import MTCNN
 from loguru import logger
 
-from scaleadv.attacks.hsj import MyHopSkipJump
-from scaleadv.attacks.sign_opt_new import SignOPT
-from scaleadv.datasets import get_imagenet
-from scaleadv.datasets.celeba import get_celeba
-from scaleadv.datasets.transforms import Align
-from scaleadv.defenses import POOLING_MAPS
-from scaleadv.models import resnet50, ScalingLayer
-from scaleadv.models.celeba import celeba_resnet34
-from scaleadv.models.resnet import IMAGENET_MODEL_PATH
-from scaleadv.scaling import ScalingAPI, ScalingLib, ScalingAlg, str_to_alg, str_to_lib
-
+from src.attacks.hop_skip_jump import HSJ
+from src.attacks.sign_opt import SignOPT
+from src.attacks.smart_noise import SmartNoise
+from src.datasets import get_imagenet
+from src.datasets.celeba import get_celeba
+from src.datasets.transforms import Align
+from src.defenses import POOLING_MAPS
+from src.models import ScalingLayer
+from src.models.celeba import celeba_resnet34
+from src.scaling import ScalingAPI, ScalingLib, ScalingAlg, str_to_alg, str_to_lib
 
 def attack_one(id, setid=False):
     # Load data
@@ -54,13 +53,27 @@ def attack_one(id, setid=False):
             preprocess = [nn.Sequential(POOLING_MAPS['quantile'].like(pooling_layer), scaling_layer),
                           nn.Sequential(pooling_layer, scaling_layer)]
 
+    if args.scale == 1 or args.no_smart_noise:
+        smart_noise = None
+    else:
+        smart_noise = SmartNoise(
+            hr_shape=src.shape[1:],
+            lr_shape=(3, 224, 224),
+            projection=scaling_layer,
+            projection_estimate=scaling_layer,
+            precise=args.precise_noise,
+        )
+
     if args.attack == 'hsj':
-        attack = MyHopSkipJump(classifier, max_iter=150, max_eval=200, max_query=args.query, preprocess=preprocess,
-                               tag=pref, smart_noise=not args.no_smart_noise, use_precise_noise=args.precise_noise)
-        attack.generate(src, y_src[None])
+        # attack = MyHopSkipJump(classifier, max_iter=150, max_eval=200, max_query=args.query, preprocess=preprocess,
+        #                        tag=pref, smart_noise=not args.no_smart_noise, use_precise_noise=args.precise_noise)
+        attack = HSJ(classifier, max_iter=150, max_eval=200, max_query=args.query, smart_noise=smart_noise)
+        attack.generate(src, np.array([y_src]))
     elif args.attack == 'opt':
-        attack = SignOPT(classifier, k=200, preprocess=preprocess, smart_noise=not args.no_smart_noise)
-        attack.generate(src, y_src, alpha=0.2, beta=0.001, iterations=1000, query_limit=args.query, tag=pref)
+        # attack = SignOPT(classifier, k=200, preprocess=preprocess, smart_noise=not args.no_smart_noise)
+        # attack.generate(src, y_src, alpha=0.2, beta=0.001, iterations=1000, query_limit=args.query, tag=pref)
+        attack = SignOPT(classifier, max_iter=1000, max_query=args.query, smart_noise=smart_noise)
+        attack.generate(src, y_src)
     else:
         raise NotImplementedError(args.attack)
 
