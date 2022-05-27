@@ -1,40 +1,67 @@
-import pickle
-from argparse import ArgumentParser
+import argparse
+import os
+import sys
+from pathlib import Path
 
+import numpy as np
 import torch
-import torchvision.transforms as T
 from loguru import logger
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from scaleadv.datasets import get_imagenet
-from scaleadv.models.resnet import IMAGENET_MODEL_PATH, resnet50
+from src.datasets.utils import DatasetHelper
+from src.models import imagenet_resnet50, celeba_resnet34
 
-if __name__ == '__main__':
-    p = ArgumentParser()
-    _ = p.add_argument
-    _('--model', default='none', type=str, choices=IMAGENET_MODEL_PATH.keys(), help='use robust model, optional')
-    _('--scale', default=3, type=int, help='set a fixed scale ratio, unset to use the original size')
-    args = p.parse_args()
 
-    # Load data
-    batch_size = 100
-    transform = T.Compose([T.Resize((224, 224)), T.ToTensor()])
-    dataset = get_imagenet(f'val_{args.scale}', transform)
-    loader = DataLoader(dataset, shuffle=False, num_workers=8, batch_size=batch_size)
+def main(args):
+    # Load dataset
+    dataset = DatasetHelper(name=args.dataset, scale=1, base=224, valid_samples_only=False)
+    loader = DataLoader(dataset, batch_size=args.batch, num_workers=16, prefetch_factor=16)
 
     # Load network
-    network = resnet50(args.model, normalize=True).eval().cuda()
+    match args.dataset:
+        case 'imagenet':
+            model = imagenet_resnet50('nature', normalize=True)
+            filename = args.root / 'valid_ids.imagenet.nature.npy'
+        case 'celeba':
+            model = celeba_resnet34(num_classes=11, binary_label=6, ckpt='nature')
+            filename = args.root / 'valid_ids.celeba.Mouth_Slightly_Open.npy'
+        case _:
+            raise NotImplementedError(args.dataset)
 
-    # Check
+    # Prepare
+    model = model.eval().cuda()
+
+    # Eval loop
     id_list = []
-    for i, (x, y) in tqdm(enumerate(loader)):
-        p = network(x.cuda()).argmax(1).cpu()
-        ids = i * batch_size + torch.nonzero(y == p).squeeze()
-        id_list.extend(ids.tolist())
+    for i, (x, y) in enumerate(tqdm(loader, desc='Evaluate')):
+        with torch.no_grad():
+            y_pred = model(x.cuda()).argmax(1).cpu()
+        ids = i * args.batch + torch.eq(y_pred, y).nonzero().squeeze()
+        id_list += ids.tolist()
 
-    path = f'static/meta/valid_ids.model_{args.model}.scale_{args.scale}.pkl'
-    logger.info(f'Total: {len(dataset)}')
+    # Summary
+    logger.info(f'Total: ')
     logger.info(f'Correct: {len(id_list)}')
-    logger.info(f'Saving id list to "{path}"')
-    pickle.dump(id_list, open(path, 'wb'))
+    logger.info(f'Accuracy: {len(id_list)} / {len(dataset)} ({len(id_list) / len(dataset):.2%})')
+
+    # Dump
+    logger.info(f'Saving id list to "{filename}"')
+    os.makedirs(args.root, exist_ok=True)
+    np.save(filename, id_list)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--dataset', type=str, choices=['imagenet', 'celeba'], required=True)
+    parser.add_argument('-b', '--batch', type=int, default=256)
+    parser.add_argument('-r', '--root', type=Path, default='static/meta/')
+    parser.add_argument('-t', '--output', type=str, default='valid_ids.imagenet.nature')
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == '__main__':
+    logger.remove()
+    logger.add(sys.stderr, level='INFO')
+    main(parse_args())

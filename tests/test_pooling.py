@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import TypeAlias
 
 import numpy as np
 import pytest
@@ -6,10 +6,10 @@ import torch
 import torchvision.transforms.functional as F
 from PIL import Image
 
-from scaleadv.defenses.prevention import Pooling, NonePooling, MedianPooling
+from src.defenses import Pooling, NonePooling, MedianPooling
 
-Tuple2 = Union[int, Tuple[int, int]]
-Tuple3 = Tuple[int, int, int]
+Tuple2: TypeAlias = int | tuple[int, int]
+Tuple3: TypeAlias = tuple[int, int, int]
 
 
 def _load_img(name: str) -> np.ndarray:
