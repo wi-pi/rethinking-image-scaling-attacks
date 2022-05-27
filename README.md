@@ -2,12 +2,17 @@
 
 Understanding the real potential of Image-Scaling attacks.
 
-## Install
+## Setup
 
-* Clone this repository with `git clone --recursive git@github.com:wi-pi/Scale-Adv.git`
-* Install PyTorch and run `pip install -f requirements.txt`
+### Python Environment
+```sh
+conda create -n scaling python=3.10
+conda activate scaling
+conda install pytorch torchvision cudatoolkit=11.3 -c pytorch
+pip install -r requirements.txt
+```
 
-## Prerequisites
+### Prerequisites
 
 * Download ImageNet dataset (validation) in `static/datasets/imagenet/val`
 * Download [robust models](https://github.com/MadryLab/robustness#pretrained-models) in `static/models/`

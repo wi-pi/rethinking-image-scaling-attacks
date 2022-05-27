@@ -229,6 +229,8 @@ modules.xml
 
 # Static files
 .DS_Store
-*.png
-*.npy
-*.pdf
+/*.png
+/*.npy
+/*.pdf
+/static
+!testcases
