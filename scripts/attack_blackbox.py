@@ -27,7 +27,9 @@ def main(args):
     os.makedirs(output_path, exist_ok=True)
 
     # Load dataset
-    dataset = DatasetHelper(name=args.dataset, scale=args.scale, base=base)
+    dataset = DatasetHelper(name=args.dataset, scale=args.scale, base=base, valid_samples_only=True)
+    if args.num_eval:
+        args.id = dataset.sample(args.num_eval)
 
     # Load scaling
     lr_size, hr_size = base, base * args.scale
@@ -49,7 +51,7 @@ def main(args):
     if args.scale > 1:
         scaling_layer = ScalingLayer.from_api(scaling).eval().cuda()
 
-    # Synthesize projection
+    # Synthesize projection (only combine non-None layers)
     projection = nn.Sequential(*filter(None, [pooling_layer, scaling_layer]))
     projection_estimate = nn.Sequential(*filter(None, [pooling_layer_estimate, scaling_layer]))
 
@@ -122,8 +124,10 @@ def main(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     _ = parser.add_argument
-    # Dataset & Model
+    # Test Samples
     _('-i', '--id', type=int, nargs='+', help='test image IDs')
+    _('-n', '--num-eval', type=int, help='number of randomly sampled images to test')
+    # Dataset & Model
     _('-d', '--dataset', type=str, choices=['imagenet', 'celeba'], required=True, help='test dataset')
     _('-m', '--model', type=str, choices=['imagenet', 'celeba', 'api'], help='test model')
     # Scaling
@@ -135,13 +139,13 @@ def parse_args():
     # Attack
     _('-a', '--attack', default='hsj', choices=['hsj', 'opt'], help='attack type')
     _('-q', '--query', default=25000, type=int, help='query budget')
-    _('--no-smart-noise', action='store_true')
-    _('--no-smart-median', action='store_true')
-    _('--precise-noise', action='store_true')
+    _('--no-smart-noise', action='store_true', help='disable scaling-aware noise sampling')
+    _('--no-smart-median', action='store_true', help='disable gradient-efficient median approximation')
+    _('--precise-noise', action='store_true', help='use the straightforward scaling-aware noise sampling')
     # Misc
-    _('-o', '--output', type=Path, default='static/blackbox-results')
-    _('-t', '--tag', default='default', type=str)
-    _('-g', '--gpu', default=0)
+    _('-o', '--output', type=Path, default='static/blackbox-results', help='path to output directory')
+    _('-t', '--tag', default='', type=str, help='name for this experiment')
+    _('-g', '--gpu', default=0, type=int, help='GPU id')
     args = parser.parse_args()
 
     """
