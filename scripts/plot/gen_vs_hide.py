@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 from typing import Iterable
 
 import matplotlib.pyplot as plt
@@ -81,8 +80,6 @@ def plot(
 
 
 if __name__ == '__main__':
-    PlotKit.ROOT = Path('static/logs/')
-    PlotKit.OUTPUT = Path('static/plots/')
     os.makedirs(PlotKit.OUTPUT, exist_ok=True)
     PlotKit.set_style()
 

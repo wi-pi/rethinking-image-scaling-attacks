@@ -60,8 +60,8 @@ class DataKit(object):
 
 
 class PlotKit(object):
-    ROOT: Path = NotImplemented
-    OUTPUT: Path = NotImplemented
+    ROOT = Path('static/logs/')
+    OUTPUT = Path('static/plots/')
 
     @staticmethod
     def set_style(font_size: int = 20):
@@ -99,7 +99,7 @@ class PlotKit(object):
         plt.xlim(0, max(x_ticks))
         plt.ylabel(r'Perturbation (scaled $\ell_2$)')
         plt.yscale('log')
-        plt.legend(borderaxespad=0)
+        plt.legend(borderaxespad=0, fontsize=18)
         plt.grid(True, linewidth=1.5)
 
         # Save
@@ -132,7 +132,7 @@ class PlotKit(object):
 
             for q, sar, p, c in zip(query_budgets, sar_all, text_pos, ['k', 'b', 'r']):
                 plt.plot(pert_budgets, sar, c=c, lw=3, label={'k': key}.get(c), **config)
-                rot = np.degrees(np.arctan2(sar[p + 1] - sar[p], 0.1))
+                rot = np.degrees(np.arctan2(sar[p + 1] - sar[p], 0.4))
                 plt.text(pert_budgets[p], sar[p], f'{q}K', c=c, rotation=rot, **text_kwargs)
 
         # Wrapup
@@ -142,7 +142,7 @@ class PlotKit(object):
         plt.ylabel('Success Attack Rate (%)')
         plt.yticks(list(range(0, 101, 20)))
         plt.ylim(0, 100)
-        plt.legend(borderaxespad=0, loc=legend_loc, fontsize=16)
+        plt.legend(borderaxespad=0, loc=legend_loc, fontsize=18)
         plt.grid(True, linewidth=1.5)
 
         # Save

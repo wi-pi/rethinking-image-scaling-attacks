@@ -1,13 +1,10 @@
 import os
-from pathlib import Path
 
 import numpy as np
 
 from scripts.plot.utils import PlotKit
 
 if __name__ == '__main__':
-    PlotKit.ROOT = Path('static/logs/')
-    PlotKit.OUTPUT = Path('static/plots/')
     os.makedirs(PlotKit.OUTPUT, exist_ok=True)
     PlotKit.set_style()
 
