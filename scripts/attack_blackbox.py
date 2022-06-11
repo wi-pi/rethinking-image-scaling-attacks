@@ -143,7 +143,7 @@ def parse_args():
     _('--no-smart-median', action='store_true', help='disable gradient-efficient median approximation')
     _('--precise-noise', action='store_true', help='use the straightforward scaling-aware noise sampling')
     # Misc
-    _('-o', '--output', type=Path, default='static/blackbox-results', help='path to output directory')
+    _('-o', '--output', type=Path, default='static/logs', help='path to output directory')
     _('-t', '--tag', default='', type=str, help='name for this experiment')
     _('-g', '--gpu', default=0, type=int, help='GPU id')
     args = parser.parse_args()
