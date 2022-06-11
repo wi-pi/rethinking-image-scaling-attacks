@@ -100,11 +100,12 @@ def main(args):
                 logger.error(exc)
 
         # Load attack (within loop since the attack could be stateful, which we want to avoid)
+        shared_kwargs = dict(max_query=args.query, smart_noise=smart_noise)
         match args.attack:
             case 'hsj':
-                attack = HSJ(classifier, max_iter=150, max_eval=200, max_query=args.query, smart_noise=smart_noise)
+                attack = HSJ(classifier, batch_size=1, max_iter=150, max_eval=200, **shared_kwargs)
             case 'opt':
-                attack = SignOPT(classifier, max_iter=1000, max_query=args.query, smart_noise=smart_noise)
+                attack = SignOPT(classifier, max_iter=1000, **shared_kwargs)
             case _:
                 raise NotImplementedError(f'Unknown attack "{args.attack}".')
 
