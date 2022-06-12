@@ -94,10 +94,10 @@ class PlotKit(object):
             plt.plot(query_budgets, dk.pert_vs_query(key), lw=3, label=key, **config)
 
         # Wrapup
-        plt.xlabel('# Queries')
+        plt.xlabel('Queries Budget (#)')
         plt.xticks(list(x_ticks), [f'{i}K' for i in x_ticks])
         plt.xlim(0, max(x_ticks))
-        plt.ylabel(r'Perturbation (scaled $\ell_2$)')
+        plt.ylabel(r'Median Perturbation (scaled $\ell_2$)')
         plt.yscale('log')
         plt.legend(borderaxespad=0, fontsize=18)
         plt.grid(True, linewidth=1.5)
@@ -139,7 +139,7 @@ class PlotKit(object):
         plt.xlabel(r'Perturbation Budget (scaled $\ell_2$)')
         plt.xticks(x_ticks)
         plt.xlim(0, max(x_ticks))
-        plt.ylabel('Success Attack Rate (%)')
+        plt.ylabel('Attack Success Rate (%)')
         plt.yticks(list(range(0, 101, 20)))
         plt.ylim(0, 100)
         plt.legend(borderaxespad=0, loc=legend_loc, fontsize=18)

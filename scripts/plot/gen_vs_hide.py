@@ -65,7 +65,7 @@ def plot(
     plt.xticks(x_ticks)
     plt.xlim(0, max(x_ticks))
 
-    plt.ylabel('Success Attack Rate (%)')
+    plt.ylabel('Attack Success Rate (%)')
     plt.yticks(list(range(0, 101, 20)))
     plt.ylim(0, 100)
 
