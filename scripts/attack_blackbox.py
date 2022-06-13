@@ -85,6 +85,11 @@ def main(args):
 
     # Attack loop
     for i in args.id:
+        # Skip if already attacked
+        if os.path.exists(output_path / f'{i}.csv'):
+            logger.debug(f'Skip {i}.')
+            continue
+
         # Load data
         x, y = dataset[i]
         logger.info(f'Loading source image: id {i}, label {y}, shape {x.shape}, dtype {x.dtype}.')
