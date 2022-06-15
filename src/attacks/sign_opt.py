@@ -151,8 +151,8 @@ class SignOPT(object):
 
                 # logging
                 nb_query += grad_queries + ls_count
-                pbar.set_postfix({'query': nb_query, 'l2': f'{gg:.3f}'})
-                self.log.append((i, nb_query, gg))
+                pbar.set_postfix({'query': nb_query, 'l2': f'{gg:.5f}'})
+                self.log.append((nb_query, gg))
 
                 # stop if we reach the query limit
                 if nb_query > self.max_query:

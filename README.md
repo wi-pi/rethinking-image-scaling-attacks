@@ -1,110 +1,124 @@
-# Scale-Adv
+# Rethinking Image-Scaling Attacks
 
-Understanding the real potential of Image-Scaling attacks.
+This repository is the official implementation of *Rethinking Image-Scaling Attacks: The Interplay Between Vulnerabilities in Machine Learning Systems*.
 
-## Setup
+## Requirements
 
-### Python Environment
-```sh
+### Environment
+
+To setup environment:
+
+```shell
 conda create -n scaling python=3.10
 conda activate scaling
 conda install pytorch torchvision cudatoolkit=11.3 -c pytorch
 pip install -r requirements.txt
 ```
 
-### Prerequisites
+### Datasets
 
-* Download ImageNet dataset (validation) in `static/datasets/imagenet/val`
-* Download [robust models](https://github.com/MadryLab/robustness#pretrained-models) in `static/models/`
-* Define your datasets like `scaleadv/datasets/imagenet.py`
-* Define your models like `scaleadv/models/resnet.py`
+To prepare ImageNet:
 
-## Common Usage Examples
+* Download the validation set from https://www.image-net.org
+* Extract to `./static/datasets/imagenet/`
 
-### Set global arguments
+To prepare CelebA:
 
-> See detailed help in `python -m scaleadv.tests.scale_adv -h`
->
-> These arguments are generally the `...` parts in Hide/Generate examples.
+* Download the test set from https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html
+* Extract to `./static/datasets/celeba/`
 
-**Example: Test cv.linear on PGD-30 with L2-20 to bypass the median defense.**
+### Models
 
-```sh
-python -m sclaeadv.tests.scale_adv \
---id 5000 --target 200 --model 2 \
---lib cv --algo linear --scale 3 \
---eps 20 --step 30 \
---defense median
+To prepare models for ImageNet:
+
+* The natural model will be downloaded automatically by Torch Vision.
+* (Optionally) Download the robust ResNet-50 model `imagenet_l2_3_0.pt` from [GitHub Repo](https://github.com/MadryLab/robustness#pretrained-models).
+* Save to `./static/models/`
+
+To prepare models for CelebA:
+
+* Download the pre-trained ResNet-34 model from [Google Drive](https://drive.google.com/file/d/13dIGRabkMBRt5CaWEkaUjhJD17VMPdQW/view?usp=sharing).
+* Save to `./static/models/`
+
+## Usage
+
+### Select Images for Evaluation
+
+To select ImageNet images larger than 672*672 that are correctly classified:
+
+```shell
+python -m scripts.select_images -d imagenet
 ```
 
-**Example: Test cv.linear on PGD-30 with L2-20 to bypass the random defense, approximate by cheap sampling.**
+To select CelebA images that are correctly classified:
 
-```sh
-python -m sclaeadv.tests.scale_adv \
---id 5000 --target 200 --model 2 \
---lib cv --algo linear --scale 3 \
---eps 20 --step 30 \
---defense random --mode cheap --samples 200
+```shell
+python -m scripts.select_images -d celeba
 ```
 
-### Hide a given adversarial example
+### Evaluate black-box attacks on ImageNet
 
-> See detailed help in `python -m scaleadv.tests.scale_adv hide -h`
+To preview all arguments:
 
-**Example: Hide to bypass the median defense.**
-
-```sh
-python -m scaleadv.tests.scale_adv ... \
---defense median \
-hide --lr 0.01 --lam-inp 8 --iter 1000
+```shell
+python -m scripts.attack_blackbox --help
 ```
 
-**Example: Hide to bypass the random defense.**
+To run HSJ attack (LR) on ImageNet:
 
-```sh
-python -m scaleadv.tests.scale_adv ... \
---defense random --mode cheap --samples 200 \
-hide --lr 0.1 --lam-inp 200 --iter 120
+```shell
+python -m scripts.attack_blackbox \
+    --id 0 --dataset imagenet --model imagenet \
+    --scale 1 --defense none \
+    --attack hsj --query 25000 \
+    --output static/logs --tag demo \
+    --gpu 0
 ```
 
-### Generate an HR adversarial example
+To run HSJ attack (HR) on ImageNet with median filtering defense:
 
-> See detailed help in `python -m scaleadv.tests.scale_adv generate -h`
-
-**Example: Generate to bypass the median defense.**
-
-```sh
-python -m scaleadv.tests.scale_adv ... \
---defense median \
-generate --big-eps 40 --big-sig 4.0 --big-step 100
+```shell
+python -m scripts.attack_blackbox \
+    --id 0 --dataset imagenet --model imagenet \
+    --scale 3 --defense median \
+    --attack hsj --query 25000 \
+    --output static/logs --tag demo \
+    --gpu 0
 ```
 
-**Example: Generate to bypass the random defense.**
+To run HSJ attack (HR) on CelebA with no defense:
 
-```sh
-python -m scaleadv.tests.scale_adv ... \
---defense random --mode cheap --samples 200 \
-generate --big-eps 40 --big-sig 4.0 --big-step 100
+```shell
+python -m scripts.attack_blackbox \
+    --id 0 --dataset celeba --model celeba \
+    --scale 3 --defense none \
+    --attack hsj --query 25000 \
+    --output static/logs --tag demo \
+    --gpu 0
 ```
 
-### Plot random pooling's histogram.
+To run HSJ attack (HR) on Cloud API:
 
-Add `--lapace` to plot Laplacian approximations.
+*Note: You need to set `TENCENT_ID` and `TENCENT_KEY` as environment variables to access the API.*
 
-```sh
-python -m scaleadv.experiments.random_hist \
---id 5000 \
---lib cv --algo linear \
---laplace
+```shell
+python -m scripts.attack_blackbox \
+    --id 0 --dataset imagenet --model api \
+    --scale 3 --defense none \
+    --attack hsj --query 3000 \
+    --output static/logs --tag demo \
+    --gpu 0
 ```
+
+To run ablation study, use the following flags:
+* No SNS `--tag bad_noise --no-smart-noise`
+* No improved median `--tag bad_noise -no-smart-median`
+* No efficient SNS `--tag eq1 --precise-noise`
 
 ## Acknowledgements
 
 * Pretrained Robust Models
   * https://github.com/MadryLab/robustness#pretrained-models
-* Pretrained Smoothing Models
-  * https://github.com/locuslab/smoothing#getting-started
-  * https://github.com/Hadisalman/smoothing-adversarial#download-our-pretrained-models
 * Previous Image-Scaling Attack's Implementation
   * https://github.com/yfchen1994/scaling_camouflage
   * https://github.com/EQuiw/2019-scalingattack/tree/master/scaleatt
