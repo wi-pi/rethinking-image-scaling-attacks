@@ -15,6 +15,7 @@ loguru
 IPython
 pytest
 prettytable
+imagesize
 
 # api
 tencentcloud-sdk-python

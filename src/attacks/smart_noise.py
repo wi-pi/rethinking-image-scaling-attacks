@@ -30,6 +30,8 @@ class SmartNoise(object):
     def _get_noise_imprecise(self, x: np.ndarray, n: int) -> np.ndarray:
         # setup
         noise = np.zeros((n,) + self.hr_shape, dtype=ART_NUMPY_DTYPE)
+        if len(x.shape) == 4:
+            x = x.squeeze(0)
         x_hr = torch.as_tensor(x[None]).cuda()
 
         # generate n noise
