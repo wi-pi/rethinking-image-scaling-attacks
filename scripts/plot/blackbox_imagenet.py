@@ -24,7 +24,7 @@ if __name__ == '__main__':
                 curve_configs={
                     f'{full} (HR)': dict(dir=f'imagenet_imagenet_{short}_{defense}_3x', c='C2'),
                     f'{full} (HR w/o {tag})': dict(dir=f'imagenet_imagenet_{short}_{defense}_3x/{ablation}', c='C1'),
-                    f'{full} (LR)': dict(dir=f'imagenet_imagenet_{short}_{defense}_1x', c='k', ls='--'),
+                    f'{full} (LR)': dict(dir=f'imagenet_imagenet_{short}_none_1x', c='k', ls='--'),
                 },
                 save=f'pert-vs-query-{short}-{defense}.pdf'
             )
@@ -36,7 +36,7 @@ if __name__ == '__main__':
                 curve_configs={
                     f'{full} (HR)': dict(dir=f'imagenet_imagenet_{short}_{defense}_3x', ls='-'),
                     f'{full} (HR w/o {tag})': dict(dir=f'imagenet_imagenet_{short}_{defense}_3x/{ablation}', ls='--'),
-                    f'{full} (LR)': dict(dir=f'imagenet_imagenet_{short}_{defense}_1x', ls=':'),
+                    f'{full} (LR)': dict(dir=f'imagenet_imagenet_{short}_none_1x', ls=':'),
                 },
                 legend_loc='lower right',
                 save=f'sar-vs-pert-{short}-{defense}.pdf'

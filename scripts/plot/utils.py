@@ -5,6 +5,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from loguru import logger
 
 
 class DataKit(object):
@@ -16,6 +17,7 @@ class DataKit(object):
 
     def load(self, key: str, root: str | Path, file_list: list[str] | None = None):
         root = Path(root)
+        logger.info(f'Loading data from "{root}".')
         if file_list is None:
             file_list = root.glob('*.csv')
         else:
@@ -58,6 +60,13 @@ class DataKit(object):
         for key, root in keys_roots:
             self.load(key, root, file_list=shared_file_list)
 
+    def load_multiple(self, keys_roots: list[tuple[str, str | Path]], consistent: bool = True):
+        if consistent:
+            self.load_consistent(keys_roots)
+        else:
+            for key, root in keys_roots:
+                self.load(key, root)
+
 
 class PlotKit(object):
     ROOT = Path('static/logs/')
@@ -83,14 +92,18 @@ class PlotKit(object):
         x_ticks: Iterable[int],
         curve_configs: dict,
         save: str | None = None,
+        consistent: bool = True,
     ):
         # Init figure
         plt.figure(figsize=(5, 5), constrained_layout=True)
 
-        # Collect & Plot
+        # Collect
         dk = DataKit(query_budgets=query_budgets, pert_budgets=None)
+        keys_roots = [(k, PlotKit.ROOT / c.pop('dir')) for k, c in curve_configs.items()]
+        dk.load_multiple(keys_roots, consistent=consistent)
+
+        # Plot
         for key, config in curve_configs.items():
-            dk.load(key, PlotKit.ROOT / config.pop('dir'))
             plt.plot(query_budgets, dk.pert_vs_query(key), lw=3, label=key, **config)
 
         # Wrapup
@@ -117,17 +130,20 @@ class PlotKit(object):
         curve_configs: dict,
         legend_loc: str,
         save: str | None = None,
+        consistent: bool = True,
     ):
         # Init figure
         plt.figure(figsize=(5, 5), constrained_layout=True)
         text_kwargs = dict(fontsize=16, rotation_mode='anchor', bbox=dict(fc='white', ec='none', pad=0),
                            transform_rotates_text=True)
 
-        # Collect & Plot
+        # Collect
         dk = DataKit(query_budgets=query_budgets, pert_budgets=pert_budgets)
+        keys_roots = [(k, PlotKit.ROOT / c.pop('dir')) for k, c in curve_configs.items()]
+        dk.load_multiple(keys_roots, consistent=consistent)
 
+        # Plot
         for key, config in curve_configs.items():
-            dk.load(key, PlotKit.ROOT / config.pop('dir'))
             sar_all = dk.sar_vs_pert(key)
 
             for q, sar, p, c in zip(query_budgets, sar_all, text_pos, ['k', 'b', 'r']):
