@@ -115,6 +115,20 @@ To run ablation study, use the following flags:
 * No improved median `--tag bad_noise -no-smart-median`
 * No efficient SNS `--tag eq1 --precise-noise`
 
+## Citation
+
+If you find this work useful in your research, please cite our paper with the following BibTeX:
+
+```bib
+@inproceedings{gao2022rethinking,
+  author    = {Yue Gao and Ilia Shumailov and Kassem Fawaz},
+  title     = {Rethinking Image-Scaling Attacks: The Interplay Between Vulnerabilities in Machine Learning Systems},
+  booktitle = {International Conference on Machine Learning},
+  year      = {2022},
+  url       = {https://proceedings.mlr.press/v162/gao22g.html},
+}
+```
+
 ## Acknowledgements
 
 * Pretrained Robust Models
