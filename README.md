@@ -126,10 +126,17 @@ If you find this work useful in your research, please cite our paper with the fo
 ```bib
 @inproceedings{gao2022rethinking,
   author    = {Yue Gao and Ilia Shumailov and Kassem Fawaz},
+  editor    = {Kamalika Chaudhuri and Stefanie Jegelka and Le Song and Csaba Szepesv{\'{a}}ri and Gang Niu and Sivan Sabato},
   title     = {Rethinking Image-Scaling Attacks: The Interplay Between Vulnerabilities in Machine Learning Systems},
-  booktitle = {International Conference on Machine Learning},
+  booktitle = {International Conference on Machine Learning, {ICML} 2022, 17-23 July 2022, Baltimore, Maryland, {USA}},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {162},
+  pages     = {7102--7121},
+  publisher = {{PMLR}},
   year      = {2022},
   url       = {https://proceedings.mlr.press/v162/gao22g.html},
+  biburl    = {https://dblp.org/rec/conf/icml/GaoSF22.bib},
+  bibsource = {dblp computer science bibliography, https://dblp.org}
 }
 ```
 
