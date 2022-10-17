@@ -2,6 +2,10 @@
 
 This repository is the official implementation of *Rethinking Image-Scaling Attacks: The Interplay Between Vulnerabilities in Machine Learning Systems*.
 
+[[Paper](https://proceedings.mlr.press/v162/gao22g/gao22g.pdf)] [[Recorded Talk](https://slideslive.com/38983087)] [[Slides](https://icml.cc/media/icml-2022/Slides/16968_QVuMEKF.pdf)]
+
+[![Poster](figs/poster.jpg)](https://icml.cc/media/PosterPDFs/ICML%202022/01ded4259d101feb739b06c399e9cd9c_qTaoypQ.png)
+
 ## Requirements
 
 ### Environment
